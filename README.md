@@ -1,10 +1,25 @@
+<div align="center">
+
 # paper-notes
 
-[中文说明](README.md)
+[![GitHub stars](https://img.shields.io/github/stars/ZinSheng/paper-notes?style=flat-square)](https://github.com/ZinSheng/paper-notes/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/ZinSheng/paper-notes?style=flat-square)](https://github.com/ZinSheng/paper-notes/network/members)
+[![GitHub issues](https://img.shields.io/github/issues/ZinSheng/paper-notes?style=flat-square)](https://github.com/ZinSheng/paper-notes/issues)
+[![License](https://img.shields.io/github/license/ZinSheng/paper-notes?style=flat-square)](LICENSE)
+
+**A reusable, evidence-first workflow for close-reading research papers.**
+
+*Zotero · PDF annotations · Editable HTML notes · Reading dashboard*
+
+[English](README.md) · [中文](README_ZH.md)
+
+</div>
+
+---
 
 > **We Build Your Research Sense**
 
-A Zotero-based paper close-reading skill. It maintains a curated reading list, pulls PDF highlights and notes, extracts searchable body text with Python, renders editable HTML pages, and builds a reading dashboard with a historical calendar. 
+A Zotero-based paper close-reading skill. It maintains a curated reading list, pulls PDF highlights and notes, extracts searchable body text with Python, renders editable HTML pages, and builds a reading dashboard with a historical calendar. The LLM reads extracted text only; PDF images are never used as model input.
 
 ## Features
 
@@ -30,10 +45,10 @@ git clone https://github.com/ZinSheng/paper-notes.git
 cd paper-notes
 ```
 
-Copy `skill/paper-notes/` into a skill directory supported by your AI agent runtime:
+Copy `skills/paper-notes/` into a skill directory supported by your AI agent runtime:
 
 ```bash
-cp -R skill/paper-notes <your-skills-directory>/paper-notes
+cp -R skills/paper-notes <your-skills-directory>/paper-notes
 ```
 
 Prerequisites: set `ZOTERO_API_KEY` and `ZOTERO_USER_ID`; figure extraction requires PyMuPDF.

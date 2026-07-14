@@ -1,10 +1,25 @@
+<div align="center">
+
 # paper-notes
 
-[English](README_EN.md)
+[![GitHub stars](https://img.shields.io/github/stars/ZinSheng/paper-notes?style=flat-square)](https://github.com/ZinSheng/paper-notes/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/ZinSheng/paper-notes?style=flat-square)](https://github.com/ZinSheng/paper-notes/network/members)
+[![GitHub issues](https://img.shields.io/github/issues/ZinSheng/paper-notes?style=flat-square)](https://github.com/ZinSheng/paper-notes/issues)
+[![License](https://img.shields.io/github/license/ZinSheng/paper-notes?style=flat-square)](LICENSE)
+
+**A reusable, evidence-first workflow for close-reading research papers.**
+
+*Zotero · PDF annotations · Editable HTML notes · Reading dashboard*
+
+[English](README.md) · [中文](README_ZH.md)
+
+</div>
+
+---
 
 > **We Build Your Research Sense** — 把每一篇文献，都读成你的研究直觉。
 
-`paper-notes` 是一个面向 AI agent 的论文精读工作流 skill。它维护人工精选的精读清单，抓取 PDF 高亮与笔记，把每篇论文渲染成可编辑的 HTML 页面，并汇总成带历史阅读日历的阅读仪表盘。
+`paper-notes` 是一个面向 AI agent 的论文精读工作流 skill。它维护人工精选的精读清单，抓取 PDF 高亮与笔记，把每篇论文渲染成可编辑的 HTML 页面，并汇总成带历史阅读日历的阅读仪表盘。正文由 Python 从 PDF 提取为文本，模型只读取文本，不读取 PDF 图片。
 
 ## 特性
 
@@ -30,10 +45,10 @@ git clone https://github.com/ZinSheng/paper-notes.git
 cd paper-notes
 ```
 
-将 `skill/paper-notes/` 复制到支持 `SKILL.md` 技能目录的 agent runtime 中：
+将 `skills/paper-notes/` 复制到支持 `SKILL.md` 技能目录的 agent runtime 中：
 
 ```bash
-cp -R skill/paper-notes <your-skills-directory>/paper-notes
+cp -R skills/paper-notes <your-skills-directory>/paper-notes
 ```
 
 前置条件：设置 `ZOTERO_API_KEY` 和 `ZOTERO_USER_ID`；图提取需要 PyMuPDF。
