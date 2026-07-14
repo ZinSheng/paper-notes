@@ -16,10 +16,24 @@ A Zotero-based paper close-reading skill. It maintains a curated reading list, p
 - **Three theme accents**: rose, green, and blue, with persistent switching.
 - **Zotero-free mode**: supports manual PDF upload and hides Zotero-dependent dashboard modules.
 
+## Why use it
+
+- **Evidence-first**: summaries and section analyses use extracted text, metadata, and annotations while separating facts, inferences, and uncertainties.
+- **Editable outputs**: generated HTML pages support browser editing, autosave, JSON import/export, and folder sync.
+- **Reproducible artifacts**: the manifest, summaries, extracted sections, annotations, and user edits are stored as separate files for backup and versioning.
+- **Flexible sources**: connect to Zotero or import local PDFs without Zotero.
+
 ## Installation
 
 ```bash
-cp -R skill/paper-notes "$SKILLS_DIR/paper-notes"
+git clone https://github.com/ZinSheng/paper-notes.git
+cd paper-notes
+```
+
+Copy `skill/paper-notes/` into a skill directory supported by your AI agent runtime:
+
+```bash
+cp -R skill/paper-notes <your-skills-directory>/paper-notes
 ```
 
 Prerequisites: set `ZOTERO_API_KEY` and `ZOTERO_USER_ID`; figure extraction requires PyMuPDF.
@@ -35,10 +49,6 @@ python3 .codex/skills/paper-notes/scripts/build_dashboard.py
 ```
 
 Outputs are written to `outputs/paper-notes/` under the current working directory.
-
-## Acknowledgments
-
-The structured note-generation module draws on ideas from [paper-reader-heilmeier](https://github.com/RealZYZhang/paper-reader-heilmeier).
 
 ## License
 
