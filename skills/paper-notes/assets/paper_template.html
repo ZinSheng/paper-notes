@@ -166,7 +166,7 @@
   }
   .head-sub {
     font-size: 16px; line-height: 1.6; color: var(--ink-soft);
-    font-weight: 400; max-width: 560px;
+    font-weight: 400; width: 100%; max-width: none;
   }
   .head-meta {
     display: flex; flex-wrap: wrap; gap: 10px 22px;
@@ -226,6 +226,44 @@
   .sec-analysis p { margin: 0 0 0.7em; }
   .sec-analysis p:last-child { margin-bottom: 0; }
 
+  .block-lede {
+    max-width: 680px; margin: -2px 0 24px; color: var(--ink-soft);
+    font-size: 14px; line-height: 1.75;
+  }
+  .relevance-grid { margin: 0; }
+  .relevance-item { padding: 0 0 24px; margin: 0 0 24px; border-bottom: 1px solid var(--rule); }
+  .relevance-item:last-child { margin-bottom: 0; border-bottom: 0; }
+  .relevance-item h3 {
+    margin: 0 0 10px; font-size: 12px; font-weight: 600;
+    letter-spacing: .14em; text-transform: uppercase; color: var(--accent-deep);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .relevance-item h3::before {
+    content: ""; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent-mid); flex-shrink: 0;
+  }
+  .relevance-item .field-text { padding: 0; margin: 0; font-size: 15px; line-height: 1.75; }
+
+  /* Overview follows the same light, dot-led rhythm as the close-reading submodules. */
+  .overview-grid { margin: 0; }
+  .overview-item { padding: 0 0 24px; margin: 0 0 24px; border-bottom: 1px solid var(--rule); }
+  .overview-item:last-child { margin-bottom: 0; border-bottom: 0; }
+  .overview-item h3 {
+    font-size: 12.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--accent-deep); margin: 0 0 12px; display: flex; align-items: center; gap: 8px;
+  }
+  .overview-item h3::before {
+    content: ""; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent-mid); flex-shrink: 0;
+  }
+  .overview-item .field-text { padding: 0; margin: 0; font-size: 16px; line-height: 1.82; }
+  .overview-conclusion { background: transparent; }
+  .overview-conclusion .field-text + .field-text { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--accent-light); }
+  .relevance-wide { grid-column: 1 / -1; }
+  .relevance-item > .editable-list { margin: 0; }
+
+  @media (max-width: 760px) { .relevance-wide { grid-column: auto; } }
+
   .editable, [contenteditable] {
     outline: none; transition: background .15s, box-shadow .15s; border-radius: 1px;
   }
@@ -262,6 +300,7 @@
 
   /* ── sub-modules inside 09 ── */
   .submod { margin: 32px 0; }
+  .abstract-first { margin: 28px 0 0; }
   .submod > h3 {
     font-size: 12.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase;
     color: var(--accent-deep); margin-bottom: 12px; scroll-margin-top: 96px;
@@ -642,51 +681,42 @@
       __KEYWORDS_ROW__
     </header>
 
-    <section class="module" id="sec-01">
-      <h2 class="sec-h"><span class="sec-index">01</span><span class="sec-name">研究目标</span><span class="sec-hint">右侧批注 ›</span></h2>
-      <div class="field-text editable" contenteditable="true" data-field="objective" data-placeholder="用一句无行话的话概括本文的贡献，面向聪明的非专家…">__OBJECTIVE__</div>
+    <section class="submod abstract-first" aria-label="Abstract 原文">
+      <h3 id="sub-abstract">Abstract（原文）</h3>
+      <details class="abstract-box">
+        <summary>展开 / 收起 Abstract 原文</summary>
+        <div class="abstract-text">__ABSTRACT__</div>
+      </details>
     </section>
 
-    <section class="module" id="sec-02">
-      <h2 class="sec-h"><span class="sec-index">02</span><span class="sec-name">研究背景</span><span class="sec-hint">右侧批注 ›</span></h2>
-      <div class="field-text editable" contenteditable="true" data-field="problem_landscape" data-placeholder="本文面对的真实问题；领域当前如何处理；现有做法的局限…">__PROBLEM_LANDSCAPE__</div>
-    </section>
+    <section class="module reader-block" id="sec-overview">
+      <h2 class="sec-h"><span class="sec-index">01</span><span class="sec-name">论文速览</span><span class="sec-hint">右侧批注 ›</span></h2>
+      <p class="block-lede">先用几段话回答：这篇文章为什么要做、具体想解决什么、怎样做、最后得出了什么结论。</p>
 
-    <section class="module" id="sec-03">
-      <h2 class="sec-h"><span class="sec-index">03</span><span class="sec-name">研究内容</span><span class="sec-hint">右侧批注 ›</span></h2>
-      <div class="field-text editable" contenteditable="true" data-field="approach" data-placeholder="区别于前作的核心技术动作；关键方法/公式；方法如何解决问题；作者为何认为会成功…">__APPROACH__</div>
-    </section>
-
-    <section class="module" id="sec-04">
-      <h2 class="sec-h"><span class="sec-index">04</span><span class="sec-name">核心贡献</span><span class="sec-hint">右侧批注 ›</span></h2>
-      <div class="field-text editable" contenteditable="true" data-field="impact" data-placeholder="哪些群体受益；什么变得可能；发表后是否真正推动了领域…">__IMPACT__</div>
-    </section>
-
-    <section class="module" id="sec-05">
-      <h2 class="sec-h"><span class="sec-index">05</span><span class="sec-name">风险</span><span class="sec-hint">右侧批注 ›</span></h2>
-      <ol class="editable-list" contenteditable="true" data-field="risks">__RISKS_HTML__</ol>
-    </section>
-
-    <section class="module" id="sec-06">
-      <h2 class="sec-h"><span class="sec-index">06</span><span class="sec-name">成本</span><span class="sec-hint">右侧批注 ›</span></h2>
-      <div class="field-text editable" contenteditable="true" data-field="cost" data-placeholder="复现本文需要多少算力/数据/工程投入…">__COST__</div>
-    </section>
-
-    <section class="module" id="sec-07">
-      <h2 class="sec-h"><span class="sec-index">07</span><span class="sec-name">实验与结果</span><span class="sec-hint">右侧批注 ›</span></h2>
-      <div class="field-text editable" contenteditable="true" data-field="experiments_results" data-placeholder="实验设置（基准/数据/基线/指标）+ 头条结果 + 声明与证据的差距…">__EXPERIMENTS_RESULTS__</div>
-    </section>
-
-    <section class="module" id="sec-08">
-      <h2 class="sec-h"><span class="sec-index">08</span><span class="sec-name">与我研究的关联</span><span class="sec-hint">右侧批注 ›</span></h2>
-      <div class="key-concept">
-        <span class="kc-label">Why this matters</span>
-        <div class="field-text editable" contenteditable="true" data-field="relevance_to_my_work" data-placeholder="与当前研究的具体问题、设计选择或测量难题的关联…">__RELEVANCE__</div>
+      <div class="overview-grid">
+        <div class="overview-item">
+          <h3>研究背景</h3>
+          <div class="field-text editable" contenteditable="true" data-field="guide_background" data-placeholder="已有认识、现实问题与研究缺口…">__GUIDE_BACKGROUND__</div>
+        </div>
+        <div class="overview-item">
+          <h3>研究目标</h3>
+          <div class="field-text editable" contenteditable="true" data-field="guide_question" data-placeholder="作者真正想回答的问题或验证的假设…">__GUIDE_QUESTION__</div>
+        </div>
+        <div class="overview-item">
+          <h3>研究内容</h3>
+          <div class="field-text editable" contenteditable="true" data-field="guide_approach" data-placeholder="主要方法、研究设计或数据构建方式…">__GUIDE_APPROACH__</div>
+        </div>
+        <div class="overview-item overview-conclusion">
+          <h3>主要结论</h3>
+          <div class="field-text editable" contenteditable="true" data-field="guide_findings" data-placeholder="最重要的发现、结果或方法价值…">__GUIDE_FINDINGS__</div>
+          <div class="field-text editable" contenteditable="true" data-field="guide_insight" data-placeholder="这些结果意味着什么，解释边界在哪里…">__GUIDE_INSIGHT__</div>
+        </div>
       </div>
     </section>
 
-    <section class="module" id="sec-09">
-      <h2 class="sec-h"><span class="sec-index">09</span><span class="sec-name">原文内容</span><span class="sec-hint">右侧批注 ›</span></h2>
+    <section class="module reader-block" id="sec-deepread">
+      <h2 class="sec-h"><span class="sec-index">02</span><span class="sec-name">原文精读</span><span class="sec-hint">右侧批注 ›</span></h2>
+      <p class="block-lede">沿着原文的章节顺序，区分每一节说了什么，以及这些内容如何支撑论文的论证。</p>
 
       <div class="submod">
         <h3 id="sub-sections">分章节总结与分析</h3>
@@ -701,11 +731,6 @@
       <div class="submod">
         <h3 id="sub-figures">论文图表</h3>
         <div id="figuresContainer">__FIGURES_HTML__</div>
-      </div>
-
-      <div class="submod">
-        <h3 id="sub-questions">待追问</h3>
-        <ol class="editable-list" contenteditable="true" data-field="open_questions">__OPEN_QUESTIONS_HTML__</ol>
       </div>
 
       <div class="submod module-zotero">
@@ -724,20 +749,40 @@
         </div>
       </div>
 
-      <div class="submod">
-        <h3 id="sub-abstract">Abstract（原文）</h3>
-        <details class="abstract-box">
-          <summary>Abstract (原文)</summary>
-          <div class="abstract-text">__ABSTRACT__</div>
-        </details>
-      </div>
     </section>
 
-    <section class="module" id="sec-custom">
-      <h2 class="sec-h"><span class="sec-index">10</span><span class="sec-name">自定义笔记</span><span class="sec-hint">右侧批注 ›</span></h2>
-      <div class="key-concept">
-        <span class="kc-label">Your notes · 支持 Markdown 与 LaTeX 公式</span>
-        <div class="field-text editable" contenteditable="true" data-field="custom_notes" data-placeholder="你自己的笔记、公式、待办… 行内用 $…$，独立公式用 $$…$$">__CUSTOM_NOTES__</div>
+    <section class="module reader-block" id="sec-relevance">
+      <h2 class="sec-h"><span class="sec-index">03</span><span class="sec-name">参考意义</span><span class="sec-hint">右侧批注 ›</span></h2>
+      <p class="block-lede">把论文放回实际研究和复现决策中：它有什么价值，代价和风险是什么，还留下哪些问题。</p>
+
+      <div class="relevance-grid">
+        <div class="relevance-item">
+          <h3>风险与局限</h3>
+          <ol class="editable-list" contenteditable="true" data-field="risks">__RISKS_HTML__</ol>
+          <div class="field-text editable" contenteditable="true" data-field="guide_limitations" data-placeholder="最重要的边界、威胁或替代解释…">__GUIDE_LIMITATIONS__</div>
+        </div>
+        <div class="relevance-item">
+          <h3>成本与复现条件</h3>
+          <div class="field-text editable" contenteditable="true" data-field="cost" data-placeholder="复现本文需要多少数据、算力、专家或工程投入…">__COST__</div>
+        </div>
+        <div class="relevance-item relevance-wide">
+          <h3>与我研究的关联</h3>
+          <div class="key-concept">
+            <span class="kc-label">Why this matters</span>
+            <div class="field-text editable" contenteditable="true" data-field="relevance_to_my_work" data-placeholder="与当前研究的具体问题、设计选择或测量难题的关联…">__RELEVANCE__</div>
+          </div>
+        </div>
+        <div class="relevance-item relevance-wide">
+          <h3 id="sub-questions">待追问</h3>
+          <ol class="editable-list" contenteditable="true" data-field="open_questions">__OPEN_QUESTIONS_HTML__</ol>
+        </div>
+        <div class="relevance-item relevance-wide">
+          <h3>我的笔记</h3>
+          <div class="key-concept">
+            <span class="kc-label">Your notes · 支持 Markdown 与 LaTeX 公式</span>
+            <div class="field-text editable" contenteditable="true" data-field="custom_notes" data-placeholder="你自己的笔记、公式、待办… 行内用 $…$，独立公式用 $$…$$">__CUSTOM_NOTES__</div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -754,41 +799,17 @@
       <span class="notes-count" id="notesCount">0</span>
     </div>
     <div class="notes-list">
-      <div class="note-card" data-module="sec-01">
-        <button class="note-jump" data-target="sec-01" type="button"><span class="note-num">01</span><span class="note-name">研究目标</span></button>
-        <textarea class="note-area" data-module="sec-01" placeholder="对这一模块的备注…"></textarea>
+      <div class="note-card" data-module="sec-overview">
+        <button class="note-jump" data-target="sec-overview" type="button"><span class="note-num">01</span><span class="note-name">论文速览</span></button>
+        <textarea class="note-area" data-module="sec-overview" placeholder="对这一模块的备注…"></textarea>
       </div>
-      <div class="note-card" data-module="sec-02">
-        <button class="note-jump" data-target="sec-02" type="button"><span class="note-num">02</span><span class="note-name">研究背景</span></button>
-        <textarea class="note-area" data-module="sec-02" placeholder="对这一模块的备注…"></textarea>
+      <div class="note-card" data-module="sec-deepread">
+        <button class="note-jump" data-target="sec-deepread" type="button"><span class="note-num">02</span><span class="note-name">原文精读</span></button>
+        <textarea class="note-area" data-module="sec-deepread" placeholder="对这一模块的备注…"></textarea>
       </div>
-      <div class="note-card" data-module="sec-03">
-        <button class="note-jump" data-target="sec-03" type="button"><span class="note-num">03</span><span class="note-name">研究内容</span></button>
-        <textarea class="note-area" data-module="sec-03" placeholder="对这一模块的备注…"></textarea>
-      </div>
-      <div class="note-card" data-module="sec-04">
-        <button class="note-jump" data-target="sec-04" type="button"><span class="note-num">04</span><span class="note-name">核心贡献</span></button>
-        <textarea class="note-area" data-module="sec-04" placeholder="对这一模块的备注…"></textarea>
-      </div>
-      <div class="note-card" data-module="sec-05">
-        <button class="note-jump" data-target="sec-05" type="button"><span class="note-num">05</span><span class="note-name">风险</span></button>
-        <textarea class="note-area" data-module="sec-05" placeholder="对这一模块的备注…"></textarea>
-      </div>
-      <div class="note-card" data-module="sec-06">
-        <button class="note-jump" data-target="sec-06" type="button"><span class="note-num">06</span><span class="note-name">成本</span></button>
-        <textarea class="note-area" data-module="sec-06" placeholder="对这一模块的备注…"></textarea>
-      </div>
-      <div class="note-card" data-module="sec-07">
-        <button class="note-jump" data-target="sec-07" type="button"><span class="note-num">07</span><span class="note-name">实验与结果</span></button>
-        <textarea class="note-area" data-module="sec-07" placeholder="对这一模块的备注…"></textarea>
-      </div>
-      <div class="note-card" data-module="sec-08">
-        <button class="note-jump" data-target="sec-08" type="button"><span class="note-num">08</span><span class="note-name">与我研究的关联</span></button>
-        <textarea class="note-area" data-module="sec-08" placeholder="对这一模块的备注…"></textarea>
-      </div>
-      <div class="note-card" data-module="sec-09">
-        <button class="note-jump" data-target="sec-09" type="button"><span class="note-num">09</span><span class="note-name">原文内容</span></button>
-        <textarea class="note-area" data-module="sec-09" placeholder="对这一模块的备注…"></textarea>
+      <div class="note-card" data-module="sec-relevance">
+        <button class="note-jump" data-target="sec-relevance" type="button"><span class="note-num">03</span><span class="note-name">参考意义</span></button>
+        <textarea class="note-area" data-module="sec-relevance" placeholder="对这一模块的备注…"></textarea>
       </div>
     </div>
   </aside>
@@ -820,7 +841,9 @@
   // writeProse/readProse keep the round-trip lossless (text ⇄ <p> DOM).
   var PROSE_FIELDS = {
     objective:1, problem_landscape:1, approach:1, impact:1,
-    cost:1, experiments_results:1, relevance_to_my_work:1, custom_notes:1
+    cost:1, experiments_results:1, relevance_to_my_work:1, custom_notes:1,
+    guide_background:1, guide_question:1, guide_approach:1,
+    guide_findings:1, guide_insight:1, guide_limitations:1
   };
   function isProseField(f){ return PROSE_FIELDS[f] === 1; }
   // Lightweight, safe inline markdown. HTML is escaped first so raw tags can't
@@ -856,8 +879,20 @@
     paras.forEach(function(para){
       para = para.replace(/^\n+|\n+$/g,'');
       if (!para.trim()) return;
-      var p = document.createElement('p');
       var lines = para.split('\n');
+      var ordered = lines.map(function(ln){ return ln.match(/^\s*\d+[.)]\s+(.+?)\s*$/); });
+      var unordered = lines.map(function(ln){ return ln.match(/^\s*[-*+]\s+(.+?)\s*$/); });
+      if (lines.length && ordered.every(function(m){ return m; })) {
+        var ol = document.createElement('ol'); ol.className = 'markdown-list';
+        ordered.forEach(function(m){ var li=document.createElement('li'); li.innerHTML=mdInline(m[1]); ol.appendChild(li); });
+        el.appendChild(ol); return;
+      }
+      if (lines.length && unordered.every(function(m){ return m; })) {
+        var ul = document.createElement('ul'); ul.className = 'markdown-list';
+        unordered.forEach(function(m){ var li=document.createElement('li'); li.innerHTML=mdInline(m[1]); ul.appendChild(li); });
+        el.appendChild(ul); return;
+      }
+      var p = document.createElement('p');
       lines.forEach(function(ln, i){
         if (i > 0) p.appendChild(document.createElement('br'));
         var span = document.createElement('span');

@@ -34,7 +34,7 @@ DASHBOARD_PLACEHOLDER_REGISTRY = [
 
 
 def _format_authors_short(creators):
-    """'Lutz, H. et al.' from a creator list."""
+    """First author, with ``et al.`` when applicable, for the dashboard."""
     names = []
     for c in creators or []:
         if c.get("creatorType") and c["creatorType"] not in ("author", None):
@@ -46,14 +46,19 @@ def _format_authors_short(creators):
         elif last:
             names.append(last)
         elif c.get("name"):
-            names.append(c["name"])
+            # Manual imports may store every author in one comma-separated
+            # `name` string instead of Zotero-style creator records.
+            raw_name = str(c["name"]).strip()
+            split_names = [part.strip() for part in raw_name.split(",") if part.strip()]
+            if len(creators or []) == 1 and len(split_names) >= 3:
+                names.extend(split_names)
+            elif raw_name:
+                names.append(raw_name)
     if not names:
         return ""
     if len(names) == 1:
         return names[0]
-    if len(names) == 2:
-        return names[0] + " & " + names[1]
-    return names[0] + " et al."
+    return names[0] if len(names) == 1 else names[0] + " et al."
 
 
 def _week_monday(date_str):

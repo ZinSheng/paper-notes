@@ -31,7 +31,10 @@ PAPER_PLACEHOLDER_REGISTRY = [
     "__TITLE__", "__AUTHORS__", "__YEAR__", "__VENUE__",
     "__DOI__", "__DOI_LINK__", "__ZOTERO_KEY__", "__COLLECTIONS__",
     "__TAGS_HTML__", "__KEYWORDS_ROW__", "__ABSTRACT__", "__STATUS__",
-    # Heilmeier Q1-Q7
+    # Three-part paper reader: overview, close reading, and relevance.
+    "__GUIDE_BACKGROUND__", "__GUIDE_QUESTION__", "__GUIDE_APPROACH__",
+    "__GUIDE_FINDINGS__", "__GUIDE_INSIGHT__", "__GUIDE_LIMITATIONS__",
+    # Legacy/detail fields retained for compatibility with existing summaries.
     "__OBJECTIVE__", "__PROBLEM_LANDSCAPE__", "__APPROACH__", "__IMPACT__",
     "__RISKS_HTML__", "__COST__", "__EXPERIMENTS_RESULTS__",
     # kept
@@ -56,12 +59,12 @@ _SWATCH_BG = {
 }
 
 
-def format_authors(creators, max_shown=3):
-    """Render authors for the PAPER page: up to `max_shown` (default 3) authors,
-    then 'et al.'.
+def format_authors(creators, max_shown=None):
+    """Render authors for the PAPER page.
 
     e.g. "Zhao, J." (1) / "Zhao, J. & Liang, J." (2) /
-    "Zhao, J., Liang, J. & Cai, Z." (3) / 4+ → "Zhao, J., Liang, J., Cai, Z. et al."
+    "Zhao, J., Liang, J. & Cai, Z." (3). By default all authors are shown;
+    pass `max_shown` to produce a shortened display with "et al.".
     Filters to author-type creators; falls back to whatever name fields exist.
     (The dashboard keeps its own 1-author short form — _format_authors_short — untouched.)
     """
@@ -91,11 +94,9 @@ def format_authors(creators, max_shown=3):
         if len(names) == 1:
             return names[0]
         return names[0] + " & " + names[1]
-    if len(names) == max_shown:
-        # exactly max_shown authors → list all of them
-        return ", ".join(names[:-1]) + " & " + names[-1]
-    # more than max_shown → first max_shown + "et al."
-    return ", ".join(names[:max_shown]) + " et al."
+    if max_shown is not None and len(names) > max_shown:
+        return ", ".join(names[:max_shown]) + " et al."
+    return ", ".join(names[:-1]) + " & " + names[-1]
 
 
 def mdInline(s):
@@ -139,7 +140,7 @@ def render_list(items):
 
 
 def render_prose(text):
-    """Render a multi-paragraph string as <p>…</p> blocks.
+    """Render Markdown-compatible prose as paragraph or list blocks.
 
     The LLM (and hand edits) write long-form fields as natural paragraphs
     separated by a blank line ("\\n\\n"). Injecting the raw string through
@@ -157,15 +158,31 @@ def render_prose(text):
     s = str(text).replace("\r\n", "\n").replace("\r", "\n").strip()
     if not s:
         return ""
-    # Split on one-or-more blank lines into paragraphs.
+    # Source strings stay Markdown in JSON/edits files, so other renderers
+    # (such as Markdown export) can reuse them without stripping formatting.
+    # This HTML adapter recognizes simple ordered and unordered list blocks.
     paragraphs = re.split(r"\n[ \t]*\n+", s)
     out = []
+    ordered = re.compile(r"^\s*\d+[.)]\s+(.+?)\s*$")
+    unordered = re.compile(r"^\s*[-*+]\s+(.+?)\s*$")
     for para in paragraphs:
         para = para.strip("\n")
         if not para.strip():
             continue
-        lines = [mdInline(ln) for ln in para.split("\n")]
-        out.append("<p>" + "<br>".join(lines) + "</p>")
+        raw_lines = [ln.strip() for ln in para.split("\n") if ln.strip()]
+        ordered_items = [ordered.match(ln) for ln in raw_lines]
+        unordered_items = [unordered.match(ln) for ln in raw_lines]
+        if raw_lines and all(ordered_items):
+            out.append('<ol class="markdown-list">' + "".join(
+                "<li>" + mdInline(m.group(1)) + "</li>" for m in ordered_items
+            ) + "</ol>")
+        elif raw_lines and all(unordered_items):
+            out.append('<ul class="markdown-list">' + "".join(
+                "<li>" + mdInline(m.group(1)) + "</li>" for m in unordered_items
+            ) + "</ul>")
+        else:
+            lines = [mdInline(ln) for ln in raw_lines]
+            out.append("<p>" + "<br>".join(lines) + "</p>")
     return "".join(out)
 
 
@@ -404,7 +421,10 @@ def render_sections(sections, paper_key=None):
     prepared.sort(key=section_key)
     cards = []
     for i, s in enumerate(prepared):
-        lvl = int(s.get("level", 2))
+        # Prefer the source number for visual hierarchy. LLM-generated
+        # `level` metadata is occasionally flattened (e.g. both "4" and
+        # "4.1" marked level 2); numbered subsections must remain indented.
+        declared_level = int(s.get("level", 2))
         raw_heading = str(s.get("heading", "")).strip()
         # A numeric-only heading is an extraction artifact. Do not render a
         # card whose title is merely "4.1" or "4.2".
@@ -412,6 +432,8 @@ def render_sections(sections, paper_key=None):
             continue
         number_match = re.match(r"^(\d+(?:\.\d+)*)(?:[.)])?\s+(.+)$", raw_heading)
         source_number = s.get("_number", "")
+        number_level = len(source_number.split(".")) + 1 if source_number else 2
+        lvl = max(declared_level, number_level)
         display_heading = number_match.group(2) if number_match else raw_heading
         heading = _common.html_escape(display_heading)
         page = _common.html_escape(str(s.get("page", "")))
@@ -515,8 +537,8 @@ def build(key, summary_file=None):
         return edits.get(field, summary.get(field, default))
 
     # The merged object injected into the page (edits win, fall back to summary).
-    # Schema v3 is evidence-aware and paper-type driven. Keep legacy display
-    # slots as compact views so existing HTML templates remain compatible.
+    # Schema v4 is evidence-aware and paper-type driven. Keep legacy detail
+    # fields as fallbacks so existing summaries remain compatible.
     initial = {}
     initial["objective"] = pick("one_sentence_summary", pick("objective", ""))
     initial["problem_landscape"] = pick("background_and_gap", pick("problem_landscape", ""))
@@ -529,12 +551,21 @@ def build(key, summary_file=None):
     initial["experiments_results"] = results + (("\n\n" + benchmark) if benchmark else "")
     initial["relevance_to_my_work"] = pick("relevance_to_my_work", "")
     initial["custom_notes"] = pick("custom_notes", "")
+    guide = summary.get("reading_guide", {})
+    if not isinstance(guide, dict):
+        guide = {}
+    initial["guide_background"] = pick("guide_background", guide.get("background", pick("background_and_gap", "")))
+    initial["guide_question"] = pick("guide_question", guide.get("question", pick("research_question", "")))
+    initial["guide_approach"] = pick("guide_approach", guide.get("approach", pick("method_or_design", "")))
+    initial["guide_findings"] = pick("guide_findings", guide.get("main_findings", pick("results_or_claims", "")))
+    initial["guide_insight"] = pick("guide_insight", guide.get("insight", pick("interpretation", "")))
+    initial["guide_limitations"] = pick("guide_limitations", guide.get("limitations", pick("limitations_and_threats", "")))
     for f in ["paper_type", "keywords", "research_question", "data_or_materials",
               "interpretation", "evidence_map", "uncertainties", "open_questions"]:
         initial[f] = pick(f, [] if f in ("paper_type", "keywords", "evidence_map", "uncertainties", "open_questions") else "")
     initial["key_quotes"] = pick("key_quotes", [])
     initial["module_notes"] = pick("module_notes", {})
-    initial["schema_version"] = summary.get("schema_version", 3)
+    initial["schema_version"] = summary.get("schema_version", 4)
     initial["zotero_key"] = key
     initial["sections"] = sections_data.get("sections", [])
     initial["generated_at"] = summary.get("generated_at", _common.now_iso())
@@ -580,6 +611,12 @@ def build(key, summary_file=None):
         "__STATUS__": _common.html_escape(status),
         "__KEYWORDS_ROW__": paper_keywords(meta),
         # Heilmeier Q1-Q7 (long-form fields → multi-paragraph <p> blocks)
+        "__GUIDE_BACKGROUND__": render_prose(initial["guide_background"]),
+        "__GUIDE_QUESTION__": render_prose(initial["guide_question"]),
+        "__GUIDE_APPROACH__": render_prose(initial["guide_approach"]),
+        "__GUIDE_FINDINGS__": render_prose(initial["guide_findings"]),
+        "__GUIDE_INSIGHT__": render_prose(initial["guide_insight"]),
+        "__GUIDE_LIMITATIONS__": render_prose(initial["guide_limitations"]),
         "__OBJECTIVE__": render_prose(initial["objective"]),
         "__PROBLEM_LANDSCAPE__": render_prose(initial["problem_landscape"]),
         "__APPROACH__": render_prose(initial["approach"]),

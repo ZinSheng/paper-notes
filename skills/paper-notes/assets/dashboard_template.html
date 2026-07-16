@@ -182,13 +182,21 @@
   .coll-papers .paper-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
 
   /* ── table view ── */
-  .paper-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .paper-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13.5px; }
   .paper-table th { text-align: left; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--rule); background: var(--bg); white-space: nowrap; }
   .paper-table td { padding: 10px; border-bottom: 1px solid var(--rule-lit); vertical-align: top; color: var(--ink); }
   .paper-table tr:hover td { background: var(--accent-tint); }
   .pt-title { font-weight: 600; color: var(--ink); text-decoration: none; }
   .pt-title:hover { color: var(--accent-mid); }
-  .pt-meta { color: var(--ink-faint); font-family: var(--font-mono); font-size: 12px; white-space: nowrap; }
+  .pt-meta { color: var(--ink-faint); font-family: var(--font-mono); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .paper-table th:nth-child(1), .paper-table td:nth-child(1) { width: 30%; }
+  .paper-table th:nth-child(2), .paper-table td:nth-child(2) { width: 20%; }
+  .paper-table th:nth-child(3), .paper-table td:nth-child(3) { width: 7%; }
+  .paper-table th:nth-child(4), .paper-table td:nth-child(4) { width: 18%; }
+  .paper-table th:nth-child(5), .paper-table td:nth-child(5) { width: 9%; }
+  .paper-table th:nth-child(6), .paper-table td:nth-child(6) { width: 7%; }
+  .paper-table th:nth-child(7), .paper-table td:nth-child(7) { width: 9%; }
+  .pt-authors { white-space: normal; overflow-wrap: anywhere; word-break: break-word; line-height: 1.45; }
   .pt-path { color: var(--ink-soft); font-size: 12px; }
   .status-badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 10px; white-space: nowrap; }
   .status-badge.reading { background: var(--accent-tint); color: var(--accent-deep); }
@@ -505,7 +513,7 @@
       var stLabel = p.status === 'reading' ? 'Reading' : (p.status === 'done' ? 'Done' : 'Archived');
       tr.innerHTML =
         '<td><a class="pt-title" href="'+escapeAttr(p.html_path)+'">'+escapeHtml(p.title)+'</a></td>'+
-        '<td class="pt-meta">'+escapeHtml(p.authors)+'</td>'+
+        '<td class="pt-meta pt-authors">'+escapeHtml(p.authors)+'</td>'+
         '<td class="pt-meta">'+escapeHtml(p.year)+'</td>'+
         '<td class="pt-meta">'+escapeHtml(p.venue || '—')+'</td>'+
         '<td><span class="status-badge '+p.status+'">'+stLabel+'</span></td>'+
