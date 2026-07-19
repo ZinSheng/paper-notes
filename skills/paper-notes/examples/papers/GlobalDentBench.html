@@ -1,0 +1,1408 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>GlobalDentBench: A Multinational Benchmark for Evaluating LLM Clinical Reasoning in Dentistry with Expert Calibration — Close Reading</title>
+<script>
+  (function(){
+    var v = '2026-07-14-v5';
+    if (location.search.indexOf('nocache=' + v) === -1) {
+      var url = location.origin + location.pathname + '?nocache=' + v + location.hash;
+      location.replace(url);
+    }
+  })();
+</script>
+<link rel="stylesheet" href="../fonts/fonts.css">
+<style>
+  :root {
+    --accent-light: #F5B7AB;
+    --accent-mid:   #ED7E7D;
+    --accent-deep:  #C73B41;
+    --accent-tint:  #FDF6F4;
+    --accent-mid-rgb: 237,126,125;
+    --ink:        #423F3D;
+    --ink-soft:   #6E655E;
+    --ink-faint:  #7E756D;
+    --rule:       #EEE8E4;
+    --rule-lit:   #F5F0EC;
+    --border:     #E4DDD7;
+    --bg:         #FFFFFF;
+    --bg-soft:    #FAFAF8;
+    --bg-info:    #FDFCFB;
+
+    --font-body: "Hanken Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+    --font-display: "Spectral", Georgia, "Times New Roman", "Noto Serif SC", "Songti SC", serif;
+    --font-mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+
+    --w-toc: 200px;
+    --w-notes: 250px;
+    --w-main: minmax(500px, 720px);
+    --gx: clamp(40px, 5vw, 72px);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 16px; scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+  body {
+    font-family: var(--font-body);
+    background: var(--bg); color: var(--ink);
+    line-height: 1.72; font-weight: 400;
+    -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  .progress-rail {
+    position: fixed; top: 0; left: 0; right: 0; height: 1px;
+    background: var(--rule-lit); z-index: 120;
+  }
+  .progress-rail::after {
+    content: ""; display: block; height: 100%; width: 0%;
+    background: var(--accent-mid); transition: width .12s linear;
+  }
+
+  /* ── topbar ── */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px clamp(28px, 4vw, 48px);
+    margin: 0 auto; flex-wrap: wrap; gap: 12px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .tb-left {
+    font-size: 11px; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--ink-faint); font-weight: 500;
+  }
+  .tb-left .tb-key { color: var(--ink-soft); font-family: var(--font-mono); letter-spacing: .04em; }
+  .tb-right { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+  .tb-group { display: inline-flex; align-items: center; gap: 10px; flex-wrap: nowrap; }
+  .tb-sep { width: 1px; height: 18px; background: var(--rule); flex-shrink: 0; }
+  .tb-link {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11px; letter-spacing: .10em; text-transform: uppercase;
+    color: var(--ink-faint); text-decoration: none; font-weight: 500;
+    padding: 5px 0; cursor: pointer; background: none; border: none;
+    font-family: var(--font-body);
+    border-bottom: 1px solid transparent; transition: color .2s, border-color .2s;
+  }
+  .tb-link:hover { color: var(--accent-mid); border-bottom-color: var(--accent-mid); }
+  .tb-link.is-connected { color: #8FB98A; border-bottom-color: #8FB98A; }
+  .tb-back { padding: 5px 0; }
+  .tb-back:hover { color: var(--accent-mid); border-bottom-color: transparent; }
+
+  .status-group { display: inline-flex; gap: 4px; align-items: center; }
+  .status-label {
+    font-size: 11px; letter-spacing: .10em; text-transform: uppercase;
+    color: var(--ink-faint); font-weight: 500; margin-right: 4px;
+  }
+  .status-btn {
+    font-size: 11px; letter-spacing: .04em; font-weight: 600;
+    color: var(--ink-faint); background: none;
+    border: 1px solid var(--rule); cursor: pointer;
+    padding: 3px 9px; font-family: var(--font-body); transition: all .18s;
+  }
+  .status-btn:hover { color: var(--ink-soft); border-color: var(--ink-faint); }
+  .status-btn.is-active { color: var(--accent-deep); border-color: var(--accent-deep); background: var(--accent-tint); }
+
+  /* ── accent theme switcher ── */
+  .accent-group { display: inline-flex; gap: 6px; align-items: center; }
+  .accent-label {
+    font-size: 11px; letter-spacing: .10em; text-transform: uppercase;
+    color: var(--ink-faint); font-weight: 500; margin-right: 2px;
+  }
+  .accent-dot {
+    width: 16px; height: 16px; border-radius: 50%; cursor: pointer;
+    border: 1px solid var(--rule); padding: 0; background: none;
+    transition: transform .15s, box-shadow .15s; position: relative;
+  }
+  .accent-dot::after {
+    content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--dot);
+  }
+  .accent-dot[data-accent="rose"]  { --dot: #ED7E7D; }
+  .accent-dot[data-accent="green"] { --dot: #6FBF92; }
+  .accent-dot[data-accent="blue"]  { --dot: #6BA6D4; }
+  .accent-dot:hover { transform: scale(1.12); }
+  .accent-dot.is-active { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--dot); }
+
+  /* ── three-column reader grid ── */
+  .reader {
+    display: grid;
+    grid-template-columns: var(--w-toc) minmax(500px, 1fr) var(--w-notes);
+    column-gap: var(--gx);
+    justify-content: space-between;
+    margin: 0 auto; padding: 0 clamp(28px, 4vw, 48px);
+    align-items: start;
+  }
+  .toc {
+    position: sticky; top: 84px; align-self: start;
+    width: var(--w-toc);
+    max-height: calc(100vh - 104px); overflow-y: auto; padding-right: 4px;
+    font-size: 13px;
+  }
+  .notes {
+    position: sticky; top: 84px; align-self: start;
+    width: var(--w-notes);
+    max-height: calc(100vh - 104px); overflow-y: auto; padding-left: 4px;
+    font-size: 13px;
+  }
+  .page { min-width: 0; padding-bottom: 96px; }
+
+  /* ── paper header ── */
+  .head {
+    padding: 48px 0 36px;
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 12px;
+  }
+  .head-overline {
+    font-size: 11px; letter-spacing: .18em; text-transform: uppercase;
+    color: var(--accent-deep); font-weight: 600; margin-bottom: 18px;
+  }
+  .head-title {
+    font-size: clamp(28px, 4.6vw, 42px);
+    font-family: var(--font-display);
+    font-weight: 600; line-height: 1.16; letter-spacing: -.01em;
+    color: var(--ink); margin-bottom: 14px;
+  }
+  .head-sub {
+    font-size: 16px; line-height: 1.6; color: var(--ink-soft);
+    font-weight: 400; width: 100%; max-width: none;
+  }
+  .head-meta {
+    display: flex; flex-wrap: wrap; gap: 10px 22px;
+    margin-top: 26px; font-size: 13px; color: var(--ink-faint);
+  }
+  .head-meta > div { display: flex; align-items: center; gap: 8px; }
+  .hm-dot { width: 6px; height: 6px; background: var(--accent-mid); border-radius: 50%; flex-shrink: 0; }
+  .hm-val { color: var(--ink); font-weight: 500; }
+  .hm-val a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--rule); }
+  .hm-val a:hover { color: var(--accent-mid); border-bottom-color: var(--accent-mid); }
+  .hm-val .hm-time { font-family: var(--font-mono); }
+
+  .head-status { display: flex; align-items: center; gap: 10px; margin-top: 20px; }
+  .keywords-row { margin-top: 8px; }
+  .keywords-value { font-size: 13px; color: var(--ink-soft); }
+  .hs-label {
+    font-size: 11px; letter-spacing: .10em; text-transform: uppercase;
+    color: var(--ink-faint); font-weight: 500;
+  }
+  /* ── module + headings (simplified) ── */
+  .module { scroll-margin-top: 96px; }
+  .sec-h {
+    display: flex; align-items: baseline; gap: 14px;
+    margin: 58px 0 16px; scroll-margin-top: 96px; cursor: pointer;
+    position: relative;
+  }
+  .sec-index {
+    font-family: var(--font-mono); font-size: 13px; font-weight: 500;
+    color: var(--accent-deep); background: var(--accent-tint);
+    border: 1px solid var(--accent-light); border-radius: 999px;
+    min-width: 34px; height: 30px; padding: 0 8px;
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0; letter-spacing: .02em;
+  }
+  .sec-name {
+    font-size: 23px; font-weight: 600; color: var(--ink);
+    font-family: var(--font-display);
+    letter-spacing: -.01em; line-height: 1.22;
+  }
+  .sec-hint {
+    margin-left: auto; align-self: center;
+    font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--ink-faint); opacity: 0; transition: opacity .2s;
+  }
+  .sec-h:hover .sec-hint { opacity: 1; }
+
+  .field-text {
+    font-size: 16px; line-height: 1.82; color: var(--ink);
+    padding: 4px 8px; margin: 0 -8px 4px; min-height: 1.6em;
+  }
+
+  /* Natural paragraph breaks inside prose fields (multi-<p>). */
+  .field-text p { margin: 0 0 0.92em; }
+  .field-text p:last-child { margin-bottom: 0; }
+  .sec-summary p { margin: 0 0 0.75em; }
+  .sec-summary p:last-child { margin-bottom: 0; }
+  .sec-analysis p { margin: 0 0 0.7em; }
+  .sec-analysis p:last-child { margin-bottom: 0; }
+
+  .block-lede {
+    max-width: 680px; margin: -2px 0 24px; color: var(--ink-soft);
+    font-size: 14px; line-height: 1.75;
+  }
+  .relevance-grid { margin: 0; }
+  .relevance-item { padding: 0 0 24px; margin: 0 0 24px; border-bottom: 1px solid var(--rule); }
+  .relevance-item:last-child { margin-bottom: 0; border-bottom: 0; }
+  .relevance-item h3 {
+    margin: 0 0 10px; font-size: 12px; font-weight: 600;
+    letter-spacing: .14em; text-transform: uppercase; color: var(--accent-deep);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .relevance-item h3::before {
+    content: ""; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent-mid); flex-shrink: 0;
+  }
+  .relevance-item .field-text { padding: 0; margin: 0; font-size: 15px; line-height: 1.75; }
+
+  /* Overview follows the same light, dot-led rhythm as the close-reading submodules. */
+  .overview-grid { margin: 0; }
+  .overview-item { padding: 0 0 24px; margin: 0 0 24px; border-bottom: 1px solid var(--rule); }
+  .overview-item:last-child { margin-bottom: 0; border-bottom: 0; }
+  .overview-item h3 {
+    font-size: 12.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--accent-deep); margin: 0 0 12px; display: flex; align-items: center; gap: 8px;
+  }
+  .overview-item h3::before {
+    content: ""; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent-mid); flex-shrink: 0;
+  }
+  .overview-item .field-text { padding: 0; margin: 0; font-size: 16px; line-height: 1.82; }
+  .overview-conclusion { background: transparent; }
+  .overview-conclusion .field-text + .field-text { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--accent-light); }
+  .relevance-wide { grid-column: 1 / -1; }
+  .relevance-item > .editable-list { margin: 0; }
+
+  @media (max-width: 760px) { .relevance-wide { grid-column: auto; } }
+
+  .editable, [contenteditable] {
+    outline: none; transition: background .15s, box-shadow .15s; border-radius: 1px;
+  }
+  .editable:focus, [contenteditable]:focus {
+    background: var(--accent-tint); box-shadow: 0 0 0 1px var(--accent-mid);
+  }
+  .editable:empty::before, [contenteditable]:empty::before {
+    content: attr(data-placeholder); color: var(--ink-faint); font-style: italic;
+  }
+
+  .body ol, .body ul {
+    margin: 12px 0 24px; padding: 0; list-style: none; counter-reset: ls;
+  }
+  .body ol li {
+    position: relative; padding: 7px 0 7px 40px;
+    font-size: 15.5px; line-height: 1.7; color: var(--ink); counter-increment: ls;
+  }
+  .body ol li::before {
+    content: counter(ls); position: absolute; left: 0; top: 8px;
+    font-size: 13px; font-weight: 600; color: var(--accent-deep); width: 28px; text-align: right;
+  }
+  .editable-list li { padding-left: 40px; }
+
+  .key-concept {
+    margin: 18px 0 8px; padding: 22px 26px;
+    background: var(--bg); border: 1px solid var(--accent-light); position: relative;
+  }
+  .key-concept .kc-label {
+    position: absolute; top: -9px; left: 20px;
+    font-size: 10px; font-weight: 600; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--accent-deep);
+    background: var(--bg); padding: 2px 10px;
+  }
+
+  /* ── sub-modules inside 09 ── */
+  .submod { margin: 32px 0; }
+  .abstract-first { margin: 28px 0 0; }
+  .submod > h3 {
+    font-size: 12.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--accent-deep); margin-bottom: 12px; scroll-margin-top: 96px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .submod > h3::before {
+    content: ""; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent-mid); flex-shrink: 0;
+  }
+
+  .quote-block {
+    margin: 22px 0; padding: 20px 24px;
+    background: var(--bg); border: 1px solid var(--rule);
+    position: relative;
+  }
+  .quote-block .qb-label {
+    font-size: 10px; font-weight: 600; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--accent-deep); margin-bottom: 10px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .quote-block .qb-swatch {
+    width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--rule);
+  }
+  .quote-text {
+    font-size: 15.5px; line-height: 1.7; color: var(--ink); font-style: italic;
+    padding: 4px 8px; margin: 0 -8px 8px; min-height: 1.5em;
+  }
+  .quote-note {
+    font-size: 13.5px; line-height: 1.6; color: var(--ink-soft);
+    padding: 4px 8px; margin: 0 -8px; min-height: 1.4em;
+    border-top: 1px dashed var(--rule-lit); padding-top: 10px;
+  }
+
+  /* ── figures ── */
+  .figures-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px; margin-top: 8px;
+  }
+  .figure-card {
+    border: 1px solid var(--rule); background: var(--bg); padding: 10px;
+    transition: border-color .18s;
+  }
+  .figure-card:hover { border-color: var(--accent-light); }
+  .figure-card img { width: 100%; height: auto; display: block; background: var(--bg-soft); }
+  .figure-meta {
+    margin-top: 8px; font-size: 11px; color: var(--ink-faint);
+    font-family: var(--font-mono); letter-spacing: .02em;
+    display: flex; justify-content: space-between;
+  }
+
+  /* ── section-by-section module ── */
+  .sections-list { margin-top: 8px; display: flex; flex-direction: column; gap: 16px; }
+  .sec-card {
+    border: 1px solid var(--rule); background: var(--bg);
+    padding: 18px 22px; position: relative; scroll-margin-top: 96px;
+  }
+  .sec-card.lvl3 {
+    margin-left: 24px; background: var(--bg-soft);
+  }
+  .sec-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+  .sec-num {
+    font-family: var(--font-mono); font-size: 12px; font-weight: 500;
+    color: var(--accent-deep); background: var(--accent-tint);
+    border: 1px solid var(--accent-light); border-radius: 11px;
+    min-width: 22px; height: 22px; padding: 0 6px; box-sizing: border-box;
+    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .lvl3 .sec-num { color: var(--ink-soft); border-color: var(--border); background: var(--bg); }
+  .sec-head h3 {
+    font-size: 16px; font-weight: 700; color: var(--ink); line-height: 1.3;
+    letter-spacing: -.01em; margin: 0; flex: 1;
+  }
+  .sec-synthetic {
+    font-size: 10px; font-weight: 600; letter-spacing: .08em;
+    color: var(--ink-faint); border: 1px solid var(--rule);
+    padding: 1px 6px; border-radius: 2px; margin-left: 6px; vertical-align: middle;
+    text-transform: uppercase;
+  }
+  .sec-page { font-family: var(--font-mono); font-size: 11px; color: var(--ink-faint); flex-shrink: 0; }
+  .sec-label {
+    font-size: 10.5px; font-weight: 600; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--accent-deep); margin: 10px 0 4px;
+  }
+  .sec-label-analysis { color: var(--ink-soft); }
+  .sec-summary { font-size: 15px; line-height: 1.78; }
+  .sec-analysis {
+    font-size: 14.5px; line-height: 1.74; color: var(--ink-soft);
+    background: var(--bg); padding: 10px 12px; border-left: 1px solid var(--rule-lit);
+  }
+
+  .info-box {
+    margin: 8px 0; padding: 20px 24px;
+    border: 1px solid var(--rule); background: var(--bg);
+    font-size: 14.5px; line-height: 1.7; color: var(--ink-soft);
+  }
+  .info-box .info-label {
+    font-size: 10.5px; font-weight: 600; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--accent-deep); margin-bottom: 14px; display: block;
+  }
+  .hl-group { margin-bottom: 16px; }
+  .hl-group:last-child { margin-bottom: 0; }
+  .hl-group-head {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; font-weight: 600; letter-spacing: .10em;
+    text-transform: uppercase; color: var(--ink-soft); margin-bottom: 8px;
+  }
+  .hl-swatch { width: 11px; height: 11px; border-radius: 50%; border: 1px solid var(--rule); }
+  .hl-item {
+    font-size: 14px; line-height: 1.65; color: var(--ink);
+    padding: 6px 0 6px 14px; border-left: 1px solid var(--rule); margin-bottom: 6px;
+  }
+  .hl-item.is-comment { background: var(--accent-tint); border-left-color: var(--accent-mid); }
+  .hl-item .hl-page { font-family: var(--font-mono); font-size: 11px; color: var(--ink-faint); }
+  .hl-item .hl-comment { color: var(--accent-deep); font-size: 13px; display: block; margin-top: 2px; }
+
+  details.abstract-box {
+    margin: 8px 0 0; padding: 16px 24px;
+    border: 1px solid var(--rule); background: var(--bg);
+  }
+  details.abstract-box summary {
+    font-size: 10.5px; font-weight: 600; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--accent-deep); cursor: pointer; list-style: none;
+  }
+  details.abstract-box summary::-webkit-details-marker { display: none; }
+  details.abstract-box summary::before { content: "+ "; }
+  details.abstract-box[open] summary::before { content: "− "; }
+  .abstract-text { margin-top: 12px; font-size: 14.5px; line-height: 1.7; color: var(--ink-soft); }
+
+  /* ── left TOC ── */
+  .toc-title {
+    font-size: 10.5px; font-weight: 600; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--accent-deep);
+    margin-bottom: 14px; padding-left: 12px;
+  }
+  .toc-list { display: flex; flex-direction: column; }
+  .toc-link, .toc-sublink {
+    display: flex; align-items: baseline; gap: 8px;
+    padding: 5px 0 5px 12px; text-decoration: none; color: var(--ink-soft);
+    border-left: 1px solid transparent; line-height: 1.35;
+    transition: color .18s, border-color .18s, background .18s;
+  }
+  .toc-link:hover, .toc-sublink:hover { color: var(--ink); border-left-color: var(--accent-light); }
+  .toc-link.is-active, .toc-sublink.is-active {
+    color: var(--accent-deep); border-left-color: var(--accent-mid);
+    font-weight: 500; background: var(--accent-tint);
+  }
+  .toc-num {
+    font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-faint);
+    min-width: 20px; flex-shrink: 0;
+  }
+  .toc-label { flex: 1; }
+  .toc-sublink { padding-left: 30px; font-size: 12.5px; color: var(--ink-faint); }
+  .toc-subnum {
+    font-family: var(--font-mono); font-size: 10px; color: var(--ink-faint);
+    min-width: 24px; flex-shrink: 0;
+  }
+
+  /* ── right notes column ── */
+  .notes-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-bottom: 12px; margin-bottom: 4px;
+    border-bottom: 1px solid var(--rule);
+    position: sticky; top: 0; background: var(--bg); z-index: 2;
+  }
+  .notes-title {
+    font-size: 11px; font-weight: 600; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--accent-deep);
+  }
+  .notes-count { font-family: var(--font-mono); font-size: 11px; color: var(--ink-faint); }
+  .notes-list { display: flex; flex-direction: column; gap: 16px; padding-top: 6px; }
+  .note-card {
+    background: var(--bg);
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+    padding: 14px 16px 16px;
+    transition: transform .18s, border-color .18s, box-shadow .18s;
+  }
+  .note-card:hover {
+    border-color: var(--accent-light);
+    box-shadow: 0 4px 20px rgba(var(--accent-mid-rgb),.08);
+  }
+  .note-card.is-active {
+    background: var(--bg);
+    border-color: var(--accent-mid);
+    box-shadow: 0 0 0 1px var(--accent-mid), 0 8px 28px rgba(var(--accent-mid-rgb),.12);
+    transform: translateY(-1px);
+  }
+  .note-jump {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    background: none; border: none; cursor: pointer; padding: 0 0 10px;
+    margin-bottom: 8px;
+    border-bottom: 1px dashed var(--rule);
+    text-align: left; font-family: var(--font-body);
+  }
+  .note-jump:hover .note-name { color: var(--accent-deep); }
+  .note-num {
+    font-family: var(--font-mono); font-size: 11px; font-weight: 600;
+    color: var(--accent-deep); background: var(--accent-tint);
+    border: 1px solid var(--accent-light); border-radius: 999px;
+    min-width: 30px; height: 26px;
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .note-name { font-size: 13.5px; font-weight: 600; color: var(--ink); transition: color .18s; }
+  .note-area {
+    width: 100%; min-height: 64px; resize: vertical;
+    border: 1px solid transparent; border-radius: 10px;
+    background: var(--bg); font-family: var(--font-body);
+    font-size: 13px; line-height: 1.62; color: var(--ink-soft);
+    outline: none; padding: 10px 12px;
+    transition: background .15s, border-color .15s, box-shadow .15s, color .15s;
+  }
+  .note-area::placeholder { color: var(--ink-faint); font-style: italic; }
+  .note-area:hover { background: var(--bg); }
+  .note-area:focus {
+    background: var(--bg); color: var(--ink);
+    border-color: var(--accent-mid);
+    box-shadow: 0 0 0 3px rgba(var(--accent-mid-rgb),.12);
+  }
+
+  .footnav {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 40px 0 0; margin-top: 56px; border-top: 1px solid var(--rule);
+    font-size: 12px; color: var(--ink-faint); letter-spacing: .06em;
+  }
+  .footnav a { color: var(--ink-soft); text-decoration: none; }
+  .footnav a:hover { color: var(--accent-mid); }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--ink); color: var(--bg); padding: 11px 20px;
+    font-size: 13px; opacity: 0; transition: opacity .25s, transform .25s;
+    pointer-events: none; z-index: 200;
+  }
+  .toast.is-visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .save-dot {
+    display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--ink-faint); margin-left: 6px; vertical-align: middle; transition: background .2s;
+  }
+  .save-dot.is-dirty { background: var(--accent-mid); }
+  .save-dot.is-saved { background: #8FB98A; }
+  .save-dot.is-synced { background: #8FB98A; box-shadow: 0 0 0 2px rgba(143,185,138,.25); }
+
+  /* ── responsive: collapse to single column ── */
+  @media (max-width: 1100px) {
+    .reader { grid-template-columns: minmax(0, 1fr); }
+    .toc, .notes { display: none; }
+  }
+  @media (max-width: 640px) {
+    .head { padding: 32px 0 24px; margin-bottom: 24px; }
+    .head-title { font-size: 24px; }
+    .head-meta { gap: 12px; }
+    .key-concept, .quote-block { padding: 16px; }
+    .figures-grid { grid-template-columns: 1fr; }
+    .sec-h { gap: 10px; }
+    .sec-name { font-size: 20px; }
+  }
+
+  /* ── lightbox (click-to-enlarge figures) ── */
+  .lb-overlay {
+    position: fixed; inset: 0; z-index: 300;
+    display: none; align-items: center; justify-content: center;
+    background: rgba(66,63,61,.92); padding: 5vh 5vw;
+    cursor: zoom-out; opacity: 0; transition: opacity .22s ease;
+  }
+  .lb-overlay.is-open { display: flex; opacity: 1; }
+  .lb-stage {
+    max-width: 92vw; max-height: 90vh; display: flex;
+    flex-direction: column; align-items: center; gap: 14px;
+  }
+  .lb-img {
+    max-width: 92vw; max-height: 80vh; object-fit: contain;
+    background: #fff; box-shadow: 0 12px 48px rgba(0,0,0,.4);
+    border-radius: 2px;
+  }
+  .lb-caption {
+    color: #fff; font-size: 13px; letter-spacing: .04em;
+    font-family: var(--font-mono); opacity: .82; text-align: center;
+  }
+  .lb-close {
+    position: absolute; top: 18px; right: 22px;
+    width: 40px; height: 40px; border-radius: 50%;
+    background: rgba(255,255,255,.12); color: #fff;
+    border: 1px solid rgba(255,255,255,.3); cursor: pointer;
+    font-size: 20px; line-height: 1; display: flex;
+    align-items: center; justify-content: center;
+  }
+  .lb-close:hover { background: rgba(255,255,255,.24); }
+  .figure-card { cursor: zoom-in; }
+
+  /* ── accent themes: set <body data-accent="rose|green|blue"> ── */
+  [data-accent="green"] {
+    --accent-light: #B6DFC4; --accent-mid: #6FBF92; --accent-deep: #1F7A4F;
+    --accent-tint: #F1FAF4; --accent-mid-rgb: 111,191,146;
+  }
+  [data-accent="blue"] {
+    --accent-light: #AFD2EC; --accent-mid: #6BA6D4; --accent-deep: #286BA3;
+    --accent-tint: #F1F7FC; --accent-mid-rgb: 107,166,212;
+  }
+
+  /* When the user opted out of Zotero, hide Zotero-only modules. */
+  body[data-zotero="off"] .module-zotero { display: none; }
+
+</style>
+
+<!-- MathJax 3: render $...$, $$...$$, \(...\), \[...\] in note content. -->
+<script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['$', '$'], ['\\(', '\\)']],
+      displayMath: [['$$', '$$'], ['\\[', '\\]']]
+    },
+    svg: { fontCache: 'global' },
+    startup: {
+      ready: function () {
+        MathJax.startup.defaultReady();
+        MathJax.startup.promise.then(function () {
+          if (typeof window.litTypeset === 'function') window.litTypeset();
+        });
+      }
+    }
+  };
+</script>
+<script id="MathJax-script" async
+        src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+</head>
+<body data-accent="blue" data-zotero="on">
+
+<div class="progress-rail" id="progressRail"></div>
+
+<header class="topbar">
+  <div class="tb-left">CLOSE READING &middot; <span class="tb-key">7I8WCZ7K</span></div>
+  <div class="tb-right">
+    <a class="tb-link tb-back" href="../dashboard.html" title="返回总览 Dashboard" style="text-transform:none; letter-spacing:.04em;">&larr; 总览</a>
+    <span class="tb-sep"></span>
+    <div class="accent-group tb-group" id="accentGroup">
+      <span class="accent-label">Theme</span>
+      <button class="accent-dot" data-accent="rose" type="button" title="Rose"></button>
+      <button class="accent-dot" data-accent="green" type="button" title="Green"></button>
+      <button class="accent-dot" data-accent="blue" type="button" title="Blue"></button>
+    </div>
+    <span class="tb-sep"></span>
+    <div class="tb-group">
+      <button class="tb-link" id="btnSync" type="button" title="Auto-save edits & status to a local folder">Sync Folder</button>
+      <button class="tb-link" id="btnExport" type="button">Export JSON</button>
+      <button class="tb-link" id="btnImport" type="button">Import JSON</button>
+      <span class="save-dot" id="saveDot" title="unsaved"></span>
+    </div>
+  </div>
+</header>
+
+<div class="reader">
+
+  <nav class="toc" id="toc"><div class="toc-title">目录 · Contents</div></nav>
+
+  <main class="page body">
+
+    <header class="head">
+      <div class="head-overline">PAPER &middot; 2026 &middot; </div>
+      <h1 class="head-title">GlobalDentBench: A Multinational Benchmark for Evaluating LLM Clinical Reasoning in Dentistry with Expert Calibration</h1>
+      <p class="head-sub">Zhao, J., Liang, J., Cai, Z., Zhang, J., Wen, Z., Deng, S., Yi, W., Luo, C., Zhang, H., Chen, J., Liu, T., Bai, Z., Zhang, Z., Singh, P., Liu, X., Li, J., Tran, N., Schwendicke, F., Jin, Z., Jin, L., Chen, L., Yang, W., Wang, B., Wang, J. &amp; Jiang, S.</p>
+      <div class="head-meta">
+        <div><span class="hm-dot"></span>Collections <span class="hm-val">Benchmark</span></div>
+        <div><span class="hm-dot"></span>DOI <span class="hm-val"><a href="https://doi.org/10.48550/ARXIV.2605.24636" target="_blank" rel="noopener">10.48550/ARXIV.2605.24636</a></span></div>
+        <div><span class="hm-dot"></span>Highlights <span class="hm-val">16</span></div>
+        <div><span class="hm-dot"></span>Reading time <span class="hm-val hm-time" id="readingTime">1h 23m</span></div>
+      </div>
+      <div class="head-status">
+        <span class="hs-label">Status</span>
+        <div class="status-group">
+          <button class="status-btn" data-status="reading" type="button">Reading</button>
+          <button class="status-btn" data-status="done" type="button">Done</button>
+          <button class="status-btn" data-status="archived" type="button">Archived</button>
+        </div>
+      </div>
+      
+    </header>
+
+    <section class="submod abstract-first" aria-label="Abstract 原文">
+      <h3 id="sub-abstract">Abstract（原文）</h3>
+      <details class="abstract-box">
+        <summary>展开 / 收起 Abstract 原文</summary>
+        <div class="abstract-text">While large language models (LLMs) hold transformative potential for medicine, their reasoning robustness and safety in real-world clinical scenarios remain critically underexplored, particularly in dentistry. Here we introduce GlobalDentBench, the first multinational dental benchmark, featuring a taxonomy that encompasses 14 dental specialties across 88 countries and regions spanning six continents. The benchmark comprises 8,978 expert-validated questions across three formats (multiple-choice, short-answer, and case-based questions) and assesses three progressive reasoning levels: knowledge recall (L1), routine reasoning (L2), and individualized reasoning (L3). To ensure data quality, the automated construction framework was calibrated by six senior dentists, achieving expert agreement rates of 99.98% for multiple-choice and short-answer questions and 96.78% for the more complex case-based questions. Evaluation of 12 frontier LLMs on GlobalDentBench revealed a sharp, stepwise performance degradation with increasing reasoning complexity. Specifically, accuracy plummeted from 81.34% on multiple-choice to 64.53% on short-answer and 22.34% on case-based questions, while declining markedly from 74.01% at L1 to 55.64% at L2 and 35.71% at L3. More critically, risk analysis of real-world dental cases demonstrated an alarming overall unsafe rate of 31.01% in LLM-generated clinical recommendations, with 4.51% posing risks of irreversible patient harm and risks particularly pronounced in specialties such as orthodontics. These findings expose fundamental limitations in the medical reasoning and safety of current LLMs. Consequently, GlobalDentBench provides a scalable foundation for trustworthy clinical AI evaluation, underscoring the urgent need for rigorous validation before the safe deployment of these models in healthcare.</div>
+      </details>
+    </section>
+
+    <section class="module reader-block" id="sec-overview">
+      <h2 class="sec-h"><span class="sec-index">01</span><span class="sec-name">论文速览</span><span class="sec-hint">右侧批注 ›</span></h2>
+      <p class="block-lede">先用几段话回答：这篇文章为什么要做、具体想解决什么、怎样做、最后得出了什么结论。</p>
+
+      <div class="overview-grid">
+        <div class="overview-item">
+          <h3>研究背景</h3>
+          <div class="field-text editable" contenteditable="true" data-field="guide_background" data-placeholder="已有认识、现实问题与研究缺口…"><p>现有牙科 LLM 评测大多依赖本地执业考试或窄专科的**选择题(MCQ)**，测量的是事实记忆而非真实临床所需的**基于具体病例的推断推理**。医学基准普遍显示：模型从'规范知识检索'过渡到'包含临床模糊性的开放式推理'时性能骤降；而牙科因涉及空间分析、程序化操作与长周期治疗规划，对个体化推理要求更高。这导致'考试式高分'与'真实临床安全'之间存在明显鸿沟。</p></div>
+        </div>
+        <div class="overview-item">
+          <h3>研究目标</h3>
+          <div class="field-text editable" contenteditable="true" data-field="guide_question" data-placeholder="作者真正想回答的问题或验证的假设…"><p>论文要回答的核心问题是：**当前前沿 LLM 在牙科临床推理上的真实可靠性与安全性究竟如何？** 具体包含三点：(1) 随着任务从事实记忆走向常规推理、再到个体化推理，模型表现如何变化；(2) 不同题型(选择题/简答/病例)与不同牙科专科之间的差异有多大；(3) 在真实病例建议中存在多大比例的**不安全(甚至不可逆伤害)风险**。</p></div>
+        </div>
+        <div class="overview-item">
+          <h3>研究内容</h3>
+          <div class="field-text editable" contenteditable="true" data-field="guide_approach" data-placeholder="主要方法、研究设计或数据构建方式…"><p>1. **构建多国别牙科基准 GlobalDentBench**：从 6 国执业考试、权威教材、2020–2025 年 Scopus 病例报告三类来源自动化构造 8,978 道题，覆盖 14 个牙科专科、88 个国家/地区、6 大洲。
+2. **用三级推理层级刻画认知难度**：将每题标注为 L1 知识记忆、L2 常规推理、L3 个体化推理，使评测按临床可解释的难度梯度展开。
+3. **自动化构造 + 专家校准双保险**：六名资深牙医参与(共 297 人时)，对 MCQ/SAQ 全量专家复核(准确率 99.98%)，对 CBQ 抽审 32.89%(接受率 96.78%)；并用 rubric 化 LLM 裁判(Gemini-3-Flash-Preview，与专家一致率 98.15%)规模化评分。
+4. **做风险感知评测**：对 1,590 道病例题的 19,080 条回答按 S0/S1/S2 三级安全分级，量化可逆与不可逆伤害风险。</p></div>
+        </div>
+        <div class="overview-item overview-conclusion">
+          <h3>主要结论</h3>
+          <div class="field-text editable" contenteditable="true" data-field="guide_findings" data-placeholder="最重要的发现、结果或方法价值…"><p>1. **随推理复杂度递增，性能阶梯式崩塌**：准确率从 MCQ 81.34% → SAQ 64.53% → CBQ 22.34%；按推理层级 L1 74.01% → L2 55.64% → L3 35.71%，**所有模型 L3 均低于 50%**。
+2. **最佳模型与性价比**：Gemini-3.1-Pro-Preview 综合最优(宏平均 63.27%)，开源最优为 GLM-5(56.43%)；性价比最佳为 Gemini-3-Flash-Preview(61.59% @ $3.72/千次)，Grok-4 最贵($38.14)却仅 57.77%。
+3. **专科间系统差异**：口腔粘膜病(OMD 63.66%)最强，正畸(Ortho 50.59%)最弱，差距 13.07 个百分点。
+4. **真实病例建议 unsafe 率达 31.01%**：其中 S1(可逆伤害)26.50%、S2(不可逆/危及生命)4.51%；模型间 unsafe 率 15.97%–45.85%，正畸、牙周/种植、常规修复专科风险最高。</p></div>
+          <div class="field-text editable" contenteditable="true" data-field="guide_insight" data-placeholder="这些结果意味着什么，解释边界在哪里…"><p>论文最清晰的信号不是'难度越高性能越差'这一常识，而是**风险集中在哪里**：模型能较好记忆与复现结构化知识，却在处理含模糊性、需整合患者个体信息的真实病例时不可靠，且近三分之一的病例建议存在潜在临床危害。这表明'考试式基准高分'不能直接外推为'临床可用'，在医疗部署前必须做风险感知评测与专家验证。</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="module reader-block" id="sec-deepread">
+      <h2 class="sec-h"><span class="sec-index">02</span><span class="sec-name">原文精读</span><span class="sec-hint">右侧批注 ›</span></h2>
+      <p class="block-lede">沿着原文的章节顺序，区分每一节说了什么，以及这些内容如何支撑论文的论证。</p>
+
+      <div class="submod">
+        <h3 id="sub-sections">分章节总结与分析</h3>
+        <div id="sectionsContainer"><div class="sections-list"><section class="sec-card" data-index="0" data-num="" data-heading="Abstract" data-page="2"><div class="sec-head"><span class="sec-num"></span><h3>Abstract</h3><span class="sec-page">p.2</span></div><div class="sec-body"><div class="sec-label">本节总结</div><div class="field-text sec-summary editable" contenteditable="true" data-placeholder="本节讲了什么…"><p>摘要提出 GlobalDentBench：首个多国别牙科基准，覆盖 14 个专科、88 个国家/地区、6 大洲，含 8,978 道专家校验题，分 MCQ/SAQ/CBQ 三种题型与 L1/L2/L3 三级推理。六名资深牙医校准使 MCQ/SAQ 一致率 99.98%、CBQ 96.78%。评测 12 个前沿 LLM 显示性能随推理复杂度阶梯式退化(MCQ 81.34% → CBQ 22.34%；L1 74.01% → L3 35.71%)，真实病例建议 unsafe 率达 31.01%(其中 4.51% 为不可逆伤害风险)。</p></div><div class="sec-label sec-label-analysis">研究关联与分析</div><div class="field-text sec-analysis editable" contenteditable="true" data-placeholder="与牙科基准的关联…"><p>摘要已给出全文最核心的证据链与结论。需注意的是，31.01% 的 unsafe 率来自对 1,590 道 CBQ 的 19,080 条回答的裁判判定，其可靠性依赖 LLM-as-Judge 与 S0/S1/S2 分级标准，应结合第 2.5–2.6 与 4.4 节的方法学细节审慎解读。</p></div></div></section><section class="sec-card" data-index="1" data-num="1" data-heading="Introduction" data-page="2"><div class="sec-head"><span class="sec-num">1</span><h3>Introduction</h3><span class="sec-page">p.2</span></div><div class="sec-body"><div class="sec-label">本节总结</div><div class="field-text sec-summary editable" contenteditable="true" data-placeholder="本节讲了什么…"><p>引言建立研究动机：LLM 在标准化医学考试中可达专家水平，但真实临床需要管理诊断模糊、处理不完整信息、在多步不确定条件下迭代推理；牙科尤甚(空间分析 + 程序化操作 + 长周期个体化规划)。现有牙科评测多限于执照考试式 MCQ，测事实记忆而非临床推断。作者据此提出 GlobalDentBench，并概述其三大贡献：扩展题型到 SAQ/CBQ、提出可迁移的自动化构造框架、用 rubric 化裁判做可信评测。</p></div><div class="sec-label sec-label-analysis">研究关联与分析</div><div class="field-text sec-analysis editable" contenteditable="true" data-placeholder="与牙科基准的关联…"><p>引言的论证链(existing understanding → gap → need)清晰。一个值得注意的隐含假设是：执照考试式 MCQ 不能代表临床推理——这一前提在医学 LLM 文献中已被反复支持，但论文未给出直接对比实验来证伪'MCQ 高分即可临床可用'这一替代解释，而是用下游 CBQ 结果间接支撑。</p></div></div></section><section class="sec-card" data-index="2" data-num="2" data-heading="Results" data-page="4"><div class="sec-head"><span class="sec-num">2</span><h3>Results</h3><span class="sec-page">p.4</span></div><div class="sec-body"><div class="sec-label">本节总结</div><div class="field-text sec-summary editable" contenteditable="true" data-placeholder="本节讲了什么…"><p>结果部分(2.1–2.7)报告基准概览、题型与推理层级的性能梯度、12 个模型的横向对比、专科差异、CBQ 安全分级、构造与评测可靠性，以及一个 L3 病例研究。整体结论是：模型在标准化任务上尚可，但随开放性与病例复杂度上升而急剧退化，并在真实病例建议中存在可观的不安全比例。</p></div><div class="sec-label sec-label-analysis">研究关联与分析</div><div class="field-text sec-analysis editable" contenteditable="true" data-placeholder="与牙科基准的关联…"><p>结果的结构是按'性能梯度 → 模型对比 → 专科差异 → 风险 → 可靠性'展开的，逻辑自洽。需要区分两类证据：性能数字(可复算的准确率)属于 reported；而'风险集中在哪里''模型不可靠'属于对数字的 interpretation，论文在讨论中将其上升为'医疗 LLM 基本局限'，这一跃迁是合理的但仍受评测样本与裁判偏差约束。</p></div></div></section><section class="sec-card lvl3" data-index="3" data-num="2.1" data-heading="Benchmark Overview" data-page="4"><div class="sec-head"><span class="sec-num">2.1</span><h3>Benchmark Overview</h3><span class="sec-page">p.4</span></div><div class="sec-body"><div class="sec-label">本节总结</div><div class="field-text sec-summary editable" contenteditable="true" data-placeholder="本节讲了什么…"><p>给出 GlobalDentBench 的四个设计维度：(1) 地理覆盖 88 国/6 洲；(2) 推理层级 L1/L2/L3 的定义；(3) 14 个牙科专科分类；(4) 三种题型及其来源与数量(MCQ 3,679、SAQ 3,709、CBQ 1,590)。并说明统一协议下评测的 12 个模型(6 商业 + 6 开源)与评分方式(MCQ 精确匹配；SAQ/CBQ 用 Gemini-3-Flash-Preview 裁判)。</p></div><div class="sec-label sec-label-analysis">研究关联与分析</div><div class="field-text sec-analysis editable" contenteditable="true" data-placeholder="与牙科基准的关联…"><p>本节是理解后续数字的前提。题型数量分布极不均衡(CBQ 仅占 17.7%)，作者用 macro-average 来抑制分布偏差，这一点在第 2.2–2.3 节被明确采用，方法上处理得当。</p></div></div></section><section class="sec-card lvl3" data-index="4" data-num="2.2" data-heading="Performance Disparities Across Question Type and Reasoning Complexity" data-page="4"><div class="sec-head"><span class="sec-num">2.2</span><h3>Performance Disparities Across Question Type and Reasoning Complexity</h3><span class="sec-page">p.4</span></div><div class="sec-body"><div class="sec-label">本节总结</div><div class="field-text sec-summary editable" contenteditable="true" data-placeholder="本节讲了什么…"><p>报告核心性能梯度：全模型聚合准确率 MCQ 81.34% &gt; SAQ 64.53% &gt; CBQ 22.34%；按推理层级(控制题型分布后用 macro-average) L1 74.01% &gt; L2 55.64% &gt; L3 35.71%，所有模型 L3 均&lt;50%。梯度与三套数据集的来源/难度结构一致，而非仅由回答格式导致。</p></div><div class="sec-label sec-label-analysis">研究关联与分析</div><div class="field-text sec-analysis editable" contenteditable="true" data-placeholder="与牙科基准的关联…"><p>这是全文最关键的证据。需区分：MCQ→SAQ 的下降部分可由'开卷 vs 闭卷'解释，但 SAQ→CBQ(64.53%→22.34%)的陡降主要由'真实病例报告的歧义与冲突信息'驱动，说明模型短板在**开放式临床推理**而非文本生成格式。L3&lt;50% 对所有模型成立，是一个很强的跨模型一致信号。</p></div></div></section><section class="sec-card lvl3" data-index="5" data-num="2.3" data-heading="Comparative Analysis of Frontier Large Language Models" data-page="5"><div class="sec-head"><span class="sec-num">2.3</span><h3>Comparative Analysis of Frontier Large Language Models</h3><span class="sec-page">p.5</span></div><div class="sec-body"><div class="sec-label">本节总结</div><div class="field-text sec-summary editable" contenteditable="true" data-placeholder="本节讲了什么…"><p>横向对比 12 个模型：宏平均最优 Gemini-3.1-Pro-Preview(63.27%)，开源最优 GLM-5(56.43%)；L3 上 Claude-Sonnet-4.6 最高但所有模型仍&lt;50%。成本-性能上，Gemini-3-Flash-Preview 性价比最佳(61.59% @ $3.72/千次)，Grok-4 最贵($38.14)仅 57.77%，说明更高成本不必然换来更好表现。</p></div><div class="sec-label sec-label-analysis">研究关联与分析</div><div class="field-text sec-analysis editable" contenteditable="true" data-placeholder="与牙科基准的关联…"><p>成本-性能分析有实用价值：它提示在牙科评测/部署中不必盲目选最贵模型。 caveat 是成本按官方定价与观测 token 估算，且只覆盖一次快照；不同解码/路由策略可能改变排序。模型排名在 L3 与整体不完全一致，说明'综合能力'与'最难推理'并非同一维度。</p></div></div></section><section class="sec-card lvl3" data-index="6" data-num="2.4" data-heading="Performance Disparities Across Dental Disciplines" data-page="6"><div class="sec-head"><span class="sec-num">2.4</span><h3>Performance Disparities Across Dental Disciplines</h3><span class="sec-page">p.6</span></div><div class="sec-body"><div class="sec-label">本节总结</div><div class="field-text sec-summary editable" contenteditable="true" data-placeholder="本节讲了什么…"><p>14 个专科的 macro-average 显示：口腔粘膜病(OMD 63.66%)最高，牙髓根尖病(PPD 59.62%)、颌面放射(OMR 59.44%)次之；正畸(Ortho 50.59%)、儿科(PD 51.08%)、常规修复(CP 51.92%)最低，最高与最低相差 13.07 个百分点。OMD 是所有模型的最高分专科，最低分专科多为 Ortho。</p></div><div class="sec-label sec-label-analysis">研究关联与分析</div><div class="field-text sec-analysis editable" contenteditable="true" data-placeholder="与牙科基准的关联…"><p>专科差异与领域知识的结构有关：粘膜病/牙髓病偏事实与影像识别，正畸/修复偏空间规划与多约束整合，后者更接近 L3 个体化推理，因而更弱。该模式跨模型一致，增强了'推理类型决定难度'这一解释的可信度。</p></div></div></section><section class="sec-card lvl3" data-index="7" data-num="2.5" data-heading="Risk Analysis of LLM Answers in Case-Based Questions" data-page="6"><div class="sec-head"><span class="sec-num">2.5</span><h3>Risk Analysis of LLM Answers in Case-Based Questions</h3><span class="sec-page">p.6</span></div><div class="sec-body"><div class="sec-label">本节总结</div><div class="field-text sec-summary editable" contenteditable="true" data-placeholder="本节讲了什么…"><p>对 1,590 道 CBQ 的 19,080 条回答做 S0/S1/S2 安全分级：S0 安全 68.99%，unsafe 31.01%(S1 可逆伤害 26.50%、S2 不可逆/危及生命 4.51%)。模型 unsafe 率 15.97%–45.85%：GPT-5.4、Gemini 双雄最低，Grok-4、MiniMax-M2.7、Qwen3.5-Flash 最高。S2 排名与 S1 排名不同，说明低整体 unsafe 不等于控制好严重风险。</p></div><div class="sec-label sec-label-analysis">研究关联与分析</div><div class="field-text sec-analysis editable" contenteditable="true" data-placeholder="与牙科基准的关联…"><p>安全风险是论文最具临床意义的发现。关键限制：(1) 分级由裁判模型判定，S2 边界主观；(2) 4.51% 的 S2 比例虽小但绝对量(约 860 条)仍可观；(3) 模型间 S1/S2 排名不一致，提示单看整体 unsafe 率会掩盖严重风险。这与 2.6 的专科风险结构相互印证。</p></div></div></section><section class="sec-card lvl3" data-index="8" data-num="2.6" data-heading="Reliability of Benchmark Construction and Evaluation" data-page="7"><div class="sec-head"><span class="sec-num">2.6</span><h3>Reliability of Benchmark Construction and Evaluation</h3><span class="sec-page">p.7</span></div><div class="sec-body"><div class="sec-label">本节总结</div><div class="field-text sec-summary editable" contenteditable="true" data-placeholder="本节讲了什么…"><p>从可靠性角度解释 unsafe 率的结构：结合 S1+S2 后，风险最高的专科是正畸(Ortho 44.30%)、牙周/种植(PP 38.78%)、常规修复(CP 38.25%)，而基础与预防牙科(BSPD 1.04%)几乎无风险。S2 却集中在全身健康/药理安全(SHPS 均值 14.15%，MiniMax-M2.7 达 28.57%)、麻醉急救(AME 8.93%)、儿科(PD 6.33%)——即可逆风险高与严重风险高的专科并不重合。</p></div><div class="sec-label sec-label-analysis">研究关联与分析</div><div class="field-text sec-analysis editable" contenteditable="true" data-placeholder="与牙科基准的关联…"><p>本节把'31.01% unsafe'拆成可行动的专科-严重度矩阵，是方法论上的重要贡献。值得注意的是，高 S1(如 Ortho)与高 S2(如 SHPS)分离，意味着仅凭总体 unsafe 率无法识别最危险的临床情境，评测与监管都应分别追踪两类风险。</p></div></div></section><section class="sec-card lvl3" data-index="9" data-num="2.7" data-heading="Case Study" data-page="8"><div class="sec-head"><span class="sec-num">2.7</span><h3>Case Study</h3><span class="sec-page">p.8</span></div><div class="sec-body"><div class="sec-label">本节总结</div><div class="field-text sec-summary editable" contenteditable="true" data-placeholder="本节讲了什么…"><p>以一个 L3 病例(66 岁男性、26 牙反复脓肿)演示 CBQ 评测流程：模型需整合牙髓、牙周、修复多因素。Gemini-3-Flash-Preview 正确识别'真性牙周-牙髓联合病变'并给出分阶段多学科方案；裁判按 5 个关键点比对得 80/100，尽管一处未对齐(额外建议探查性翻瓣排除根折)，但因未引入有害建议仍判为 S0。</p></div><div class="sec-label sec-label-analysis">研究关联与分析</div><div class="field-text sec-analysis editable" contenteditable="true" data-placeholder="与牙科基准的关联…"><p>案例直观展示了评测不仅看最终答案，也看中间推理与安全。但它只是一个成功案例，无法代表 31.01% unsafe 的分布；其价值在于说明评分 rubric(关键点 + 安全分级)如何运作，而非证明模型整体安全。</p></div></div></section><section class="sec-card" data-index="10" data-num="3" data-heading="Discussion" data-page="8"><div class="sec-head"><span class="sec-num">3</span><h3>Discussion</h3><span class="sec-page">p.8</span></div><div class="sec-body"><div class="sec-label">本节总结</div><div class="field-text sec-summary editable" contenteditable="true" data-placeholder="本节讲了什么…"><p>讨论凝练三点贡献(填补牙科评测空白、可扩展构造、可信评测)，并重申核心信号：模型在 MCQ/SAQ 尚可，在 CBQ/L3 急剧退化，说明当前 LLM 更擅长检索与复现结构化知识，在真实模糊情境下不可靠。论文将其与医学 LLM 的既有研究对照，主张'考试高分≠临床就绪'，并强调部署前需严格验证。</p></div><div class="sec-label sec-label-analysis">研究关联与分析</div><div class="field-text sec-analysis editable" contenteditable="true" data-placeholder="与牙科基准的关联…"><p>讨论的 interpretation 与证据一致，未过度外推。一个未充分展开的点：论文提出框架'可迁移至其他医学专科'，但全文未给出任何迁移实证，属于被声明但未验证的主张，应标记为 speculation 而非已证实贡献。</p></div></div></section><section class="sec-card" data-index="11" data-num="4" data-heading="Methods" data-page="18"><div class="sec-head"><span class="sec-num">4</span><h3>Methods</h3><span class="sec-page">p.18</span></div><div class="sec-body"><div class="sec-label">本节总结</div><div class="field-text sec-summary editable" contenteditable="true" data-placeholder="本节讲了什么…"><p>方法部分(4.1–4.4)交代数据来源、自动化构造流水线、评测协议与专家参与框架。所有材料来自授权/公开资源，六名资深牙医(平均临床 6.8 年)参与迭代优化与终验，时间为 2026-02-05 至 03-25，共 297 人时。</p></div><div class="sec-label sec-label-analysis">研究关联与分析</div><div class="field-text sec-analysis editable" contenteditable="true" data-placeholder="与牙科基准的关联…"><p>方法学透明度较高：数据源、流水线、评测协议、专家投入均给出可审计细节。主要可复现性短板在 CBQ 原始数据因版权不公开(仅提供题名)，外部只能复现流程而不能复现数字——这是医学基准常见的版权与伦理权衡。</p></div></div></section><section class="sec-card lvl3" data-index="12" data-num="4.1" data-heading="Data Curation" data-page="18"><div class="sec-head"><span class="sec-num">4.1</span><h3>Data Curation</h3><span class="sec-page">p.18</span></div><div class="sec-body"><div class="sec-label">本节总结</div><div class="field-text sec-summary editable" contenteditable="true" data-placeholder="本节讲了什么…"><p>说明三类题型的来源与筛选：(1) MCQ 来自澳/新/加/印/英/美官方执业考试；(2) SAQ 来自按学术影响力筛选的权威教材；(3) CBQ 来自 2020–2025 年 Scopus 高影响期刊(JADA、IJOMS 等)系统检索的病例报告。全部材料按联合国 M49 标准归属到 88 国/地区，多为 PDF/Word，进入后续流水线。</p></div><div class="sec-label sec-label-analysis">研究关联与分析</div><div class="field-text sec-analysis editable" contenteditable="true" data-placeholder="与牙科基准的关联…"><p>数据溯源清晰且有地理多样性设计。潜在偏差：(1) 来源以英语国家/英语期刊为主，非英语牙科知识体系覆盖存疑；(2) 地理归属在来源不明时按作者单位等启发式推断，可能引入噪声；(3) CBQ 来自已发表病例报告，可能偏向'有趣/典型'而非真实分布。</p></div></div></section><section class="sec-card lvl3" data-index="13" data-num="4.2" data-heading="Agent Pipeline for Benchmark Construction" data-page="19"><div class="sec-head"><span class="sec-num">4.2</span><h3>Agent Pipeline for Benchmark Construction</h3><span class="sec-page">p.19</span></div><div class="sec-body"><div class="sec-label">本节总结</div><div class="field-text sec-summary editable" contenteditable="true" data-placeholder="本节讲了什么…"><p>提出三阶段自动化流水线以应对异质材料的规模化构造：阶段一文档归一化、阶段二类型感知构造、阶段三统一标注与终验。设计目标是把 PDF/图片/Office/XML 等统一为标准基准样本，并作为可迁移到其他专科的复用框架。</p></div><div class="sec-label sec-label-analysis">研究关联与分析</div><div class="field-text sec-analysis editable" contenteditable="true" data-placeholder="与牙科基准的关联…"><p>流水线是论文的工程核心，价值在于'type-aware'策略与内置 self-correction/质量控制。限制：(1) 对 CBQ 这类非结构化材料，生成阶段可能引入幻觉，仅靠 3 轮 self-correction 与 30% 人工审计兜底；(2) 可迁移性声明缺乏跨专科实证。其有效性由 4.4 的专家验收数字(99.98%/96.78%)间接支撑。</p></div></div></section><section class="sec-card lvl3" data-index="14" data-num="4.2.1" data-heading="Stage I: Document Normalization" data-page="19"><div class="sec-head"><span class="sec-num">4.2.1</span><h3>Stage I: Document Normalization</h3><span class="sec-page">p.19</span></div><div class="sec-body"><div class="sec-label">本节总结</div><div class="field-text sec-summary editable" contenteditable="true" data-placeholder="本节讲了什么…"><p>阶段一由 Reformat Agent 归一化异质材料：对 XML 用 BeautifulSoup 保留结构，对 PDF/图片用 DeepSeek-OCR2 恢复文本，对多数文本文件用 Pandoc 转换；统一转为 markdown 并补充标题/来源/作者等文档级元数据，建立统一中间表示。</p></div><div class="sec-label sec-label-analysis">研究关联与分析</div><div class="field-text sec-analysis editable" contenteditable="true" data-placeholder="与牙科基准的关联…"><p>归一化是后续质量的基础。OCR 步骤(DeepSeek-OCR2)对扫描版试卷/教材的识别误差会沿流水线传播，论文未报告 OCR 准确率，是潜在的未量化误差源。</p></div></div></section><section class="sec-card lvl3" data-index="15" data-num="4.2.2" data-heading="Stage II: Type-aware Benchmark Construction" data-page="19"><div class="sec-head"><span class="sec-num">4.2.2</span><h3>Stage II: Type-aware Benchmark Construction</h3><span class="sec-page">p.19</span></div><div class="sec-body"><div class="sec-label">本节总结</div><div class="field-text sec-summary editable" contenteditable="true" data-placeholder="本节讲了什么…"><p>阶段二由 Extract Agent 按题型构造样本：内容先分块以防上下文截断；MCQ 重排为标准选项+参考答案，SAQ 抽取问答对，CBQ 从病例叙述生成临床问题并同时抽取 5 个关键点。每样本最多 3 轮 self-correction，CBQ 验证更严格(忠实性、需临床推理、无歧义可答)。</p></div><div class="sec-label sec-label-analysis">研究关联与分析</div><div class="field-text sec-analysis editable" contenteditable="true" data-placeholder="与牙科基准的关联…"><p>CBQ 同时产出的 5 个关键点是后续 rubric 评分的基础，设计合理。self-correction 上限 3 轮、失败即丢弃，可能系统性剔除'难生成但合理'的样本，造成轻微的选择偏差，但有利于保真。</p></div></div></section><section class="sec-card lvl3" data-index="16" data-num="4.2.3" data-heading="Stage III: Unified Tagging and Final Verification" data-page="19"><div class="sec-head"><span class="sec-num">4.2.3</span><h3>Stage III: Unified Tagging and Final Verification</h3><span class="sec-page">p.19</span></div><div class="sec-body"><div class="sec-label">本节总结</div><div class="field-text sec-summary editable" contenteditable="true" data-placeholder="本节讲了什么…"><p>阶段三由 Tag Agent 按'牙科专科 + 推理层级'双维标注：两轮独立预测一致则保留，否则触发第三轮多数投票。随后 self-correction 终验(忠实性、标签一致性、满足构造标准)，失败重生成最多 3 轮；资深牙医做最终质量保障。</p></div><div class="sec-label sec-label-analysis">研究关联与分析</div><div class="field-text sec-analysis editable" contenteditable="true" data-placeholder="与牙科基准的关联…"><p>多轮一致性投票降低了单轮标注噪声，但标签本质仍是模型生成+专家抽检，并非全量专家标注，边界题(如 L2/L3 临界)的标签可信度低于全专家标注。这是 2.6 之外另一个'标签噪声'来源。</p></div></div></section><section class="sec-card lvl3" data-index="17" data-num="4.3" data-heading="Evaluation Protocol" data-page="20"><div class="sec-head"><span class="sec-num">4.3</span><h3>Evaluation Protocol</h3><span class="sec-page">p.20</span></div><div class="sec-body"><div class="sec-label">本节总结</div><div class="field-text sec-summary editable" contenteditable="true" data-placeholder="本节讲了什么…"><p>评测按题型定制：MCQ 仅输出最终选项并精确匹配；SAQ 由裁判模型二元判分；CBQ 用同一裁判但改为 5 关键点×20 分的 rubric 计分(满分 100)，并叠加 S0/S1/S2 安全分级。统一模板与 temperature=0.1，无模型特定调优；裁判选 Gemini-3-Flash-Preview(一致性稳定且成本低)。评测 12 个前沿模型(商业+开源各 6)。</p></div><div class="sec-label sec-label-analysis">研究关联与分析</div><div class="field-text sec-analysis editable" contenteditable="true" data-placeholder="与牙科基准的关联…"><p>CBQ 的 rubric 打分比单纯对错更可解释，安全分级使评测具备风险感知。主要方法论风险在 LLM-as-Judge：即便裁判与专家 98.15% 一致，其在 S2(不可逆伤害)这类高风险判定上的误差代价最高，且裁判自身也可能犯错——作者用专家校准部分缓解，但未给出 S2 的裁判-专家专项一致率。</p></div></div></section><section class="sec-card lvl3" data-index="18" data-num="4.4" data-heading="Expert-in-the-Loop Framework" data-page="21"><div class="sec-head"><span class="sec-num">4.4</span><h3>Expert-in-the-Loop Framework</h3><span class="sec-page">p.21</span></div><div class="sec-body"><div class="sec-label">本节总结</div><div class="field-text sec-summary editable" contenteditable="true" data-placeholder="本节讲了什么…"><p>说明六名 board-certified 牙医(平均 6.8 年)的全流程参与：数据来源认证与分类法制定、agent 流水线迭代优化(MCQ/SAQ 全量复核达 99.98%；CBQ 30% 抽审由 89.10% 提升至 96.78%)、评测框架校准(5 个候选裁判中 Gemini-3-Flash-Preview 专家接受率最高 98.15%，牙医互评 96.67%)。总投入 297 人时(33 个工作日，人均 1.5 小时/日)。</p></div><div class="sec-label sec-label-analysis">研究关联与分析</div><div class="field-text sec-analysis editable" contenteditable="true" data-placeholder="与牙科基准的关联…"><p>Expert-in-the-Loop 是'可信'主张的支柱。两点需注意：(1) 97.88% 的 Kimi-K2.5 与 94.05% 的 Doubao 也接近专家，说明裁判选择空间大，但不同裁判可能改变 CBQ 分数绝对值；(2) 297 人时是显著成本，意味着该范式对小团队复现门槛较高，除非自动化标注足够稳健。</p></div></div></section></div></div>
+      </div>
+
+      <div class="submod">
+        <h3 id="sub-quotes">关键引文</h3>
+        <div id="quoteContainer"><div class="quote-block"><div class="qb-label"><span class="qb-swatch" style="background:yellow;"></span>QUOTE 1 · p.2</div><div class="quote-text editable" contenteditable="true" data-field="key_quotes.0.text" data-tex="knowledge recall (L1)" data-placeholder="引文原文…">knowledge recall (L1)</div><div class="quote-note editable" contenteditable="true" data-field="key_quotes.0.note" data-tex="" data-placeholder="为什么这句重要…"></div><span class="quote-meta" data-page="2" data-color="yellow"></span></div><div class="quote-block"><div class="qb-label"><span class="qb-swatch" style="background:yellow;"></span>QUOTE 2 · p.2</div><div class="quote-text editable" contenteditable="true" data-field="key_quotes.1.text" data-tex="routine reasoning (L2)" data-placeholder="引文原文…">routine reasoning (L2)</div><div class="quote-note editable" contenteditable="true" data-field="key_quotes.1.note" data-tex="" data-placeholder="为什么这句重要…"></div><span class="quote-meta" data-page="2" data-color="yellow"></span></div><div class="quote-block"><div class="qb-label"><span class="qb-swatch" style="background:yellow;"></span>QUOTE 3 · p.2</div><div class="quote-text editable" contenteditable="true" data-field="key_quotes.2.text" data-tex="individualized reasoning (L3)" data-placeholder="引文原文…">individualized reasoning (L3)</div><div class="quote-note editable" contenteditable="true" data-field="key_quotes.2.note" data-tex="" data-placeholder="为什么这句重要…"></div><span class="quote-meta" data-page="2" data-color="yellow"></span></div><div class="quote-block"><div class="qb-label"><span class="qb-swatch" style="background:yellow;"></span>QUOTE 4 · p.9</div><div class="quote-text editable" contenteditable="true" data-field="key_quotes.3.text" data-tex="rubric-based judge model" data-placeholder="引文原文…">rubric-based judge model</div><div class="quote-note editable" contenteditable="true" data-field="key_quotes.3.note" data-tex="" data-placeholder="为什么这句重要…"></div><span class="quote-meta" data-page="9" data-color="yellow"></span></div></div>
+      </div>
+
+      <div class="submod">
+        <h3 id="sub-figures">论文图表</h3>
+        <div id="figuresContainer"><div class="figures-grid"><div class="figure-card"><img src="GlobalDentBench_images/7I8WCZ7K_fig01.jpeg" alt="Figure p.13" loading="lazy"><div class="figure-meta"><span>p.13</span><span>12039×14440</span></div></div><div class="figure-card"><img src="GlobalDentBench_images/7I8WCZ7K_fig02.jpeg" alt="Figure p.14" loading="lazy"><div class="figure-meta"><span>p.14</span><span>8600×5483</span></div></div><div class="figure-card"><img src="GlobalDentBench_images/7I8WCZ7K_fig03.jpeg" alt="Figure p.14" loading="lazy"><div class="figure-meta"><span>p.14</span><span>15170×5788</span></div></div><div class="figure-card"><img src="GlobalDentBench_images/7I8WCZ7K_fig04.jpeg" alt="Figure p.15" loading="lazy"><div class="figure-meta"><span>p.15</span><span>8832×8449</span></div></div><div class="figure-card"><img src="GlobalDentBench_images/7I8WCZ7K_fig05.jpeg" alt="Figure p.17" loading="lazy"><div class="figure-meta"><span>p.17</span><span>12085×13394</span></div></div></div></div>
+      </div>
+
+      <div class="submod module-zotero">
+        <h3 id="sub-highlights">Zotero 高亮</h3>
+        <div class="info-box">
+          <span class="info-label">Highlights from Zotero (16)</span>
+          <div id="highlightsBox"><div class="hl-group"><div class="hl-group-head"><span class="hl-swatch" style="background:#ffd400;"></span>Yellow (7)</div><div class="hl-item">knowledge recall (L1) · <span class="hl-page">p.2</span></div><div class="hl-item">routine reasoning (L2) · <span class="hl-page">p.2</span></div><div class="hl-item">individualized reasoning (L3) · <span class="hl-page">p.2</span></div><div class="hl-item">rubric-based judge model · <span class="hl-page">p.9</span></div><div class="hl-item">Stage I: Document Normalization · <span class="hl-page">p.19</span></div><div class="hl-item">Stage II: Type-aware Benchmark Construction · <span class="hl-page">p.19</span></div><div class="hl-item">Stage III: Unified Tagging and Final Verification · <span class="hl-page">p.20</span></div></div><div class="hl-group"><div class="hl-group-head"><span class="hl-swatch" style="background:#ff6666;"></span>Red (1)</div><div class="hl-item">unsafe rate · <span class="hl-page">p.2</span></div></div><div class="hl-group"><div class="hl-group-head"><span class="hl-swatch" style="background:#5fb236;"></span>Green (3)</div><div class="hl-item">multiple-choice · <span class="hl-page">p.2</span></div><div class="hl-item">short-answer · <span class="hl-page">p.2</span></div><div class="hl-item">case-based questions · <span class="hl-page">p.2</span></div></div><div class="hl-group"><div class="hl-group-head"><span class="hl-swatch" style="background:#a28ae5;"></span>Purple (5)</div><div class="hl-item">Performance Disparities Across Question Type and Reasoning Complexity · <span class="hl-page">p.4</span></div><div class="hl-item">Comparative Analysis of Frontier Large Language Models · <span class="hl-page">p.5</span></div><div class="hl-item">Performance Disparities Across Dental Disciplines · <span class="hl-page">p.6</span></div><div class="hl-item">Risk Analysis of LLM Answers in Case-Based Questions · <span class="hl-page">p.6</span></div><div class="hl-item">Reliability of Benchmark Construction and Evaluation · <span class="hl-page">p.7</span></div></div></div>
+        </div>
+      </div>
+
+      <div class="submod module-zotero">
+        <h3 id="sub-notes">Zotero 笔记</h3>
+        <div class="info-box">
+          <span class="info-label">Notes from Zotero</span>
+          <div id="notesBox"><div style="color:var(--ink-faint);font-style:italic;">无 Zotero 笔记。</div></div>
+        </div>
+      </div>
+
+    </section>
+
+    <section class="module reader-block" id="sec-relevance">
+      <h2 class="sec-h"><span class="sec-index">03</span><span class="sec-name">参考意义</span><span class="sec-hint">右侧批注 ›</span></h2>
+      <p class="block-lede">把论文放回实际研究和复现决策中：它有什么价值，代价和风险是什么，还留下哪些问题。</p>
+
+      <div class="relevance-grid">
+        <div class="relevance-item">
+          <h3>风险与局限</h3>
+          <ol class="editable-list" contenteditable="true" data-field="risks"><li>MCQ、SAQ、CBQ 的来源、开放性和难度同时变化，题型比较存在混杂。</li><li>SAQ/CBQ 的评分依赖自动判别，专家一致性不能消除系统性评分偏差。</li><li>从题库表现到真实临床获益或安全部署仍有外部效度缺口。</li><li>提取文本未给出完整的训练数据污染审计与跨国抽样比例，相关可复现性判断受限。</li></ol>
+          <div class="field-text editable" contenteditable="true" data-field="guide_limitations" data-placeholder="最重要的边界、威胁或替代解释…"><p>主要边界在于：(1) CBQ 数据因版权不公开，仅提供题名，外部复现受限；(2) LLM-as-Judge 即便与专家高度一致仍是近似，可能携带系统性偏差；(3) 仅 30% 的 CBQ 经人工审计，70% 未经专家逐条核验；(4) 评测模型为 2026 年快照，结论时效性强；(5) 地理归属与推理层级标签部分由模型自动标注，存在噪声。</p></div>
+        </div>
+        <div class="relevance-item">
+          <h3>成本与复现条件</h3>
+          <div class="field-text editable" contenteditable="true" data-field="cost" data-placeholder="复现本文需要多少数据、算力、专家或工程投入…"><p>复现需要取得受许可或公开来源材料、实现文档规范化和题型生成代理、建立题目—来源核验及标签体系，并投入牙科专家进行流程校准与终验。文中报告 6 位资深牙医在 2026-02-05 至 2026-03-25 贡献 297 人时；自动评分还依赖指定的判别模型和量规。</p></div>
+        </div>
+        <div class="relevance-item relevance-wide">
+          <h3>与我研究的关联</h3>
+          <div class="key-concept">
+            <span class="kc-label">Why this matters</span>
+            <div class="field-text editable" contenteditable="true" data-field="relevance_to_my_work" data-placeholder="与当前研究的具体问题、设计选择或测量难题的关联…"><p>与项目中关于<strong>医学基准与真实临床案例评测</strong>的阅读线索直接相关。它可为设计多层级任务、把病例风险与正确性分开报告、以及校准自动判别器时的专家抽样方案提供具体参照。</p></div>
+          </div>
+        </div>
+        <div class="relevance-item relevance-wide">
+          <h3 id="sub-questions">待追问</h3>
+          <ol class="editable-list" contenteditable="true" data-field="open_questions"><li>在固定题型内控制临床信息量后，L1–L3 的性能差异是否仍然相同？</li><li>不同判别模型、人工盲评和患者结局会如何改变安全率估计？</li><li>跨国题源是否在语言、专科和资源水平上均衡代表真实临床？</li></ol>
+        </div>
+        <div class="relevance-item relevance-wide">
+          <h3>我的笔记</h3>
+          <div class="key-concept">
+            <span class="kc-label">Your notes · 支持 Markdown 与 LaTeX 公式</span>
+            <div class="field-text editable" contenteditable="true" data-field="custom_notes" data-placeholder="你自己的笔记、公式、待办… 行内用 $…$，独立公式用 $$…$$"><p>阅读活动时间为基于 Zotero 标注时间戳的近似值，并非真实阅读时长。</p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <nav class="footnav">
+      <div>GENERATED 2026-07-19T10:38:50+0800 &middot; paper-notes</div>
+      <a href="../dashboard.html">← Back to Dashboard</a>
+    </nav>
+
+  </main>
+
+  <aside class="notes" id="notes">
+    <div class="notes-head">
+      <span class="notes-title">批注 · Notes</span>
+      <span class="notes-count" id="notesCount">0</span>
+    </div>
+    <div class="notes-list">
+      <div class="note-card" data-module="sec-overview">
+        <button class="note-jump" data-target="sec-overview" type="button"><span class="note-num">01</span><span class="note-name">论文速览</span></button>
+        <textarea class="note-area" data-module="sec-overview" placeholder="对这一模块的备注…"></textarea>
+      </div>
+      <div class="note-card" data-module="sec-deepread">
+        <button class="note-jump" data-target="sec-deepread" type="button"><span class="note-num">02</span><span class="note-name">原文精读</span></button>
+        <textarea class="note-area" data-module="sec-deepread" placeholder="对这一模块的备注…"></textarea>
+      </div>
+      <div class="note-card" data-module="sec-relevance">
+        <button class="note-jump" data-target="sec-relevance" type="button"><span class="note-num">03</span><span class="note-name">参考意义</span></button>
+        <textarea class="note-area" data-module="sec-relevance" placeholder="对这一模块的备注…"></textarea>
+      </div>
+    </div>
+  </aside>
+
+</div>
+
+<div class="toast" id="toast"></div>
+<input type="file" id="importInput" accept=".json" style="display:none">
+
+<div class="lb-overlay" id="lbOverlay" aria-hidden="true">
+  <button class="lb-close" id="lbClose" type="button" aria-label="Close">×</button>
+  <div class="lb-stage">
+    <img class="lb-img" id="lbImg" alt="enlarged figure" src="">
+    <div class="lb-caption" id="lbCaption"></div>
+  </div>
+</div>
+
+<script>
+(function() {
+  var ZKEY = "7I8WCZ7K";
+  var LS_KEY = "litreader:" + ZKEY + ":edits";
+  var LS_STATUS = "litreader:" + ZKEY + ":status";
+  var LS_ACCENT = "litreader:" + ZKEY + ":accent";
+  var LS_DIR = "litreader:" + ZKEY + ":dirhandle";
+  var INITIAL = {"objective": "GlobalDentBench 以 8,978 道跨国牙科题目评估 12 个 LLM，发现从知识回忆到患者个体化病例推理时性能显著下降，并在病例建议中观察到 31.01% 的总体不安全率。", "problem_landscape": "封闭式考试的高分不足以代表真实牙科临床推理。个体化病例要求在不确定条件下整合患者信息，而现有牙科评测缺少全球覆盖和按临床认知要求分层的测量。", "approach": "自动代理先对异构文档做规范化，再按题型生成候选样本、进行自我校正、统一标注与最终核验；6 位资深牙医参与从流程改进到终验。12 个前沿模型在统一提示与协议下评估：MCQ 采用精确匹配，SAQ/CBQ 采用经牙医校准的量规式 LLM 判别；CBQ 另按 S0（安全）、S1（潜在可逆伤害）、S2（潜在不可逆伤害）分析。", "impact": "提供覆盖 88 个国家或地区、14 个专科的牙科基准；将题目按三种格式和 L1–L3 推理层级组织；提出带专家校准、自动构建和量规式判别的评测流程，并报告模型表现和病例风险。", "risks": ["MCQ、SAQ、CBQ 的来源、开放性和难度同时变化，题型比较存在混杂。", "SAQ/CBQ 的评分依赖自动判别，专家一致性不能消除系统性评分偏差。", "从题库表现到真实临床获益或安全部署仍有外部效度缺口。", "提取文本未给出完整的训练数据污染审计与跨国抽样比例，相关可复现性判断受限。"], "cost": "复现需要取得受许可或公开来源材料、实现文档规范化和题型生成代理、建立题目—来源核验及标签体系，并投入牙科专家进行流程校准与终验。文中报告 6 位资深牙医在 2026-02-05 至 2026-03-25 贡献 297 人时；自动评分还依赖指定的判别模型和量规。", "experiments_results": "整体平均成绩按题型为 MCQ 81.34%、SAQ 64.53%、CBQ 22.34%；按推理层级为 L1 74.01%、L2 55.64%、L3 35.71%。学科均分最高的口腔黏膜疾病为 63.66%，最低的正畸为 50.59%。病例回答的总体不安全率为 31.01%，不可逆伤害风险类别占 4.51%；正畸的总体不安全率为 44.30%。\n\n基准的四个轴为地理覆盖、推理等级、牙科专科和题目格式。作者报告构建阶段中 MCQ/SAQ 与专家的一致率为 99.98%，CBQ 为 96.78%。评估判别候选与牙医审查的一致率中，Gemini-3-Flash-Preview 为 98.15%，并被选为首选专有判别模型。", "relevance_to_my_work": "与项目中关于**医学基准与真实临床案例评测**的阅读线索直接相关。它可为设计多层级任务、把病例风险与正确性分开报告、以及校准自动判别器时的专家抽样方案提供具体参照。", "custom_notes": "阅读活动时间为基于 Zotero 标注时间戳的近似值，并非真实阅读时长。", "guide_background": "现有牙科 LLM 评测大多依赖本地执业考试或窄专科的**选择题(MCQ)**，测量的是事实记忆而非真实临床所需的**基于具体病例的推断推理**。医学基准普遍显示：模型从'规范知识检索'过渡到'包含临床模糊性的开放式推理'时性能骤降；而牙科因涉及空间分析、程序化操作与长周期治疗规划，对个体化推理要求更高。这导致'考试式高分'与'真实临床安全'之间存在明显鸿沟。", "guide_question": "论文要回答的核心问题是：**当前前沿 LLM 在牙科临床推理上的真实可靠性与安全性究竟如何？** 具体包含三点：(1) 随着任务从事实记忆走向常规推理、再到个体化推理，模型表现如何变化；(2) 不同题型(选择题/简答/病例)与不同牙科专科之间的差异有多大；(3) 在真实病例建议中存在多大比例的**不安全(甚至不可逆伤害)风险**。", "guide_approach": "1. **构建多国别牙科基准 GlobalDentBench**：从 6 国执业考试、权威教材、2020–2025 年 Scopus 病例报告三类来源自动化构造 8,978 道题，覆盖 14 个牙科专科、88 个国家/地区、6 大洲。\n2. **用三级推理层级刻画认知难度**：将每题标注为 L1 知识记忆、L2 常规推理、L3 个体化推理，使评测按临床可解释的难度梯度展开。\n3. **自动化构造 + 专家校准双保险**：六名资深牙医参与(共 297 人时)，对 MCQ/SAQ 全量专家复核(准确率 99.98%)，对 CBQ 抽审 32.89%(接受率 96.78%)；并用 rubric 化 LLM 裁判(Gemini-3-Flash-Preview，与专家一致率 98.15%)规模化评分。\n4. **做风险感知评测**：对 1,590 道病例题的 19,080 条回答按 S0/S1/S2 三级安全分级，量化可逆与不可逆伤害风险。", "guide_findings": "1. **随推理复杂度递增，性能阶梯式崩塌**：准确率从 MCQ 81.34% → SAQ 64.53% → CBQ 22.34%；按推理层级 L1 74.01% → L2 55.64% → L3 35.71%，**所有模型 L3 均低于 50%**。\n2. **最佳模型与性价比**：Gemini-3.1-Pro-Preview 综合最优(宏平均 63.27%)，开源最优为 GLM-5(56.43%)；性价比最佳为 Gemini-3-Flash-Preview(61.59% @ $3.72/千次)，Grok-4 最贵($38.14)却仅 57.77%。\n3. **专科间系统差异**：口腔粘膜病(OMD 63.66%)最强，正畸(Ortho 50.59%)最弱，差距 13.07 个百分点。\n4. **真实病例建议 unsafe 率达 31.01%**：其中 S1(可逆伤害)26.50%、S2(不可逆/危及生命)4.51%；模型间 unsafe 率 15.97%–45.85%，正畸、牙周/种植、常规修复专科风险最高。", "guide_insight": "论文最清晰的信号不是'难度越高性能越差'这一常识，而是**风险集中在哪里**：模型能较好记忆与复现结构化知识，却在处理含模糊性、需整合患者个体信息的真实病例时不可靠，且近三分之一的病例建议存在潜在临床危害。这表明'考试式基准高分'不能直接外推为'临床可用'，在医疗部署前必须做风险感知评测与专家验证。", "guide_limitations": "主要边界在于：(1) CBQ 数据因版权不公开，仅提供题名，外部复现受限；(2) LLM-as-Judge 即便与专家高度一致仍是近似，可能携带系统性偏差；(3) 仅 30% 的 CBQ 经人工审计，70% 未经专家逐条核验；(4) 评测模型为 2026 年快照，结论时效性强；(5) 地理归属与推理层级标签部分由模型自动标注，存在噪声。", "paper_type": ["benchmark", "dataset"], "keywords": ["牙科", "大语言模型", "临床推理", "基准", "安全评估"], "research_question": "能否用经专家校准的跨国、多专科、多层级题库，可靠衡量 LLM 在牙科临床推理中的能力边界和安全风险？", "data_or_materials": "题库包含 3,679 道官方资格考试 MCQ、3,709 道认可牙科教材 SAQ 和 1,590 道同行评议病例报告 CBQ。文中称材料覆盖 88 个国家或地区与六大洲，并映射到 14 个牙科专科。", "interpretation": "证据表明，前沿通用与开源 LLM 的牙科能力高度依赖任务结构：标准化知识题较强，患者特异病例推理明显脆弱。风险分级使评测从分数扩展到潜在伤害，但真实临床安全性仍需前瞻性、人工监督下的验证。", "evidence_map": [{"claim": "基准包含 8,978 题、88 个国家或地区和 14 个专科。", "evidence": "Abstract；§2.1，p.4", "status": "reported"}, {"claim": "模型平均分随题型开放性和推理层级提升而下降。", "evidence": "§2.2–2.3，pp.4–5", "status": "reported"}, {"claim": "基准揭示临床部署前需要更严格验证。", "evidence": "结果中的病例风险分析与 Discussion", "status": "supported_inference"}], "uncertainties": ["提取文本的章节存在重叠和截断，无法仅据此核验全部表格、附录和污染控制细节。", "16 条 Zotero 标注主要是术语与小节标题，未提供可支撑更长论断的连续引文。"], "open_questions": ["在固定题型内控制临床信息量后，L1–L3 的性能差异是否仍然相同？", "不同判别模型、人工盲评和患者结局会如何改变安全率估计？", "跨国题源是否在语言、专科和资源水平上均衡代表真实临床？"], "key_quotes": [{"text": "knowledge recall (L1)", "page": "2", "color": "yellow", "explanation": "作者的第一层推理定义。"}, {"text": "routine reasoning (L2)", "page": "2", "color": "yellow", "explanation": "作者的第二层推理定义。"}, {"text": "individualized reasoning (L3)", "page": "2", "color": "yellow", "explanation": "作者的第三层推理定义。"}, {"text": "rubric-based judge model", "page": "9", "color": "yellow", "explanation": "开放回答的评分机制关键词。"}], "module_notes": {}, "schema_version": 4, "zotero_key": "7I8WCZ7K", "sections": [{"heading": "Abstract", "number": "", "page": 2, "level": 2, "summary": "摘要提出 GlobalDentBench：首个多国别牙科基准，覆盖 14 个专科、88 个国家/地区、6 大洲，含 8,978 道专家校验题，分 MCQ/SAQ/CBQ 三种题型与 L1/L2/L3 三级推理。六名资深牙医校准使 MCQ/SAQ 一致率 99.98%、CBQ 96.78%。评测 12 个前沿 LLM 显示性能随推理复杂度阶梯式退化(MCQ 81.34% → CBQ 22.34%；L1 74.01% → L3 35.71%)，真实病例建议 unsafe 率达 31.01%(其中 4.51% 为不可逆伤害风险)。", "analysis": "摘要已给出全文最核心的证据链与结论。需注意的是，31.01% 的 unsafe 率来自对 1,590 道 CBQ 的 19,080 条回答的裁判判定，其可靠性依赖 LLM-as-Judge 与 S0/S1/S2 分级标准，应结合第 2.5–2.6 与 4.4 节的方法学细节审慎解读。"}, {"heading": "1 Introduction", "number": "1", "page": 2, "level": 2, "summary": "引言建立研究动机：LLM 在标准化医学考试中可达专家水平，但真实临床需要管理诊断模糊、处理不完整信息、在多步不确定条件下迭代推理；牙科尤甚(空间分析 + 程序化操作 + 长周期个体化规划)。现有牙科评测多限于执照考试式 MCQ，测事实记忆而非临床推断。作者据此提出 GlobalDentBench，并概述其三大贡献：扩展题型到 SAQ/CBQ、提出可迁移的自动化构造框架、用 rubric 化裁判做可信评测。", "analysis": "引言的论证链(existing understanding → gap → need)清晰。一个值得注意的隐含假设是：执照考试式 MCQ 不能代表临床推理——这一前提在医学 LLM 文献中已被反复支持，但论文未给出直接对比实验来证伪'MCQ 高分即可临床可用'这一替代解释，而是用下游 CBQ 结果间接支撑。"}, {"heading": "2 Results", "number": "2", "page": 4, "level": 2, "summary": "结果部分(2.1–2.7)报告基准概览、题型与推理层级的性能梯度、12 个模型的横向对比、专科差异、CBQ 安全分级、构造与评测可靠性，以及一个 L3 病例研究。整体结论是：模型在标准化任务上尚可，但随开放性与病例复杂度上升而急剧退化，并在真实病例建议中存在可观的不安全比例。", "analysis": "结果的结构是按'性能梯度 → 模型对比 → 专科差异 → 风险 → 可靠性'展开的，逻辑自洽。需要区分两类证据：性能数字(可复算的准确率)属于 reported；而'风险集中在哪里''模型不可靠'属于对数字的 interpretation，论文在讨论中将其上升为'医疗 LLM 基本局限'，这一跃迁是合理的但仍受评测样本与裁判偏差约束。"}, {"heading": "2.1 Benchmark Overview", "number": "2.1", "page": 4, "level": 3, "summary": "给出 GlobalDentBench 的四个设计维度：(1) 地理覆盖 88 国/6 洲；(2) 推理层级 L1/L2/L3 的定义；(3) 14 个牙科专科分类；(4) 三种题型及其来源与数量(MCQ 3,679、SAQ 3,709、CBQ 1,590)。并说明统一协议下评测的 12 个模型(6 商业 + 6 开源)与评分方式(MCQ 精确匹配；SAQ/CBQ 用 Gemini-3-Flash-Preview 裁判)。", "analysis": "本节是理解后续数字的前提。题型数量分布极不均衡(CBQ 仅占 17.7%)，作者用 macro-average 来抑制分布偏差，这一点在第 2.2–2.3 节被明确采用，方法上处理得当。"}, {"heading": "2.2 Performance Disparities Across Question Type and Reasoning Complexity", "number": "2.2", "page": 4, "level": 3, "summary": "报告核心性能梯度：全模型聚合准确率 MCQ 81.34% > SAQ 64.53% > CBQ 22.34%；按推理层级(控制题型分布后用 macro-average) L1 74.01% > L2 55.64% > L3 35.71%，所有模型 L3 均<50%。梯度与三套数据集的来源/难度结构一致，而非仅由回答格式导致。", "analysis": "这是全文最关键的证据。需区分：MCQ→SAQ 的下降部分可由'开卷 vs 闭卷'解释，但 SAQ→CBQ(64.53%→22.34%)的陡降主要由'真实病例报告的歧义与冲突信息'驱动，说明模型短板在**开放式临床推理**而非文本生成格式。L3<50% 对所有模型成立，是一个很强的跨模型一致信号。"}, {"heading": "2.3 Comparative Analysis of Frontier Large Language Models", "number": "2.3", "page": 5, "level": 3, "summary": "横向对比 12 个模型：宏平均最优 Gemini-3.1-Pro-Preview(63.27%)，开源最优 GLM-5(56.43%)；L3 上 Claude-Sonnet-4.6 最高但所有模型仍<50%。成本-性能上，Gemini-3-Flash-Preview 性价比最佳(61.59% @ $3.72/千次)，Grok-4 最贵($38.14)仅 57.77%，说明更高成本不必然换来更好表现。", "analysis": "成本-性能分析有实用价值：它提示在牙科评测/部署中不必盲目选最贵模型。 caveat 是成本按官方定价与观测 token 估算，且只覆盖一次快照；不同解码/路由策略可能改变排序。模型排名在 L3 与整体不完全一致，说明'综合能力'与'最难推理'并非同一维度。"}, {"heading": "2.4 Performance Disparities Across Dental Disciplines", "number": "2.4", "page": 6, "level": 3, "summary": "14 个专科的 macro-average 显示：口腔粘膜病(OMD 63.66%)最高，牙髓根尖病(PPD 59.62%)、颌面放射(OMR 59.44%)次之；正畸(Ortho 50.59%)、儿科(PD 51.08%)、常规修复(CP 51.92%)最低，最高与最低相差 13.07 个百分点。OMD 是所有模型的最高分专科，最低分专科多为 Ortho。", "analysis": "专科差异与领域知识的结构有关：粘膜病/牙髓病偏事实与影像识别，正畸/修复偏空间规划与多约束整合，后者更接近 L3 个体化推理，因而更弱。该模式跨模型一致，增强了'推理类型决定难度'这一解释的可信度。"}, {"heading": "2.5 Risk Analysis of LLM Answers in Case-Based Questions", "number": "2.5", "page": 6, "level": 3, "summary": "对 1,590 道 CBQ 的 19,080 条回答做 S0/S1/S2 安全分级：S0 安全 68.99%，unsafe 31.01%(S1 可逆伤害 26.50%、S2 不可逆/危及生命 4.51%)。模型 unsafe 率 15.97%–45.85%：GPT-5.4、Gemini 双雄最低，Grok-4、MiniMax-M2.7、Qwen3.5-Flash 最高。S2 排名与 S1 排名不同，说明低整体 unsafe 不等于控制好严重风险。", "analysis": "安全风险是论文最具临床意义的发现。关键限制：(1) 分级由裁判模型判定，S2 边界主观；(2) 4.51% 的 S2 比例虽小但绝对量(约 860 条)仍可观；(3) 模型间 S1/S2 排名不一致，提示单看整体 unsafe 率会掩盖严重风险。这与 2.6 的专科风险结构相互印证。"}, {"heading": "2.6 Reliability of Benchmark Construction and Evaluation", "number": "2.6", "page": 7, "level": 3, "summary": "从可靠性角度解释 unsafe 率的结构：结合 S1+S2 后，风险最高的专科是正畸(Ortho 44.30%)、牙周/种植(PP 38.78%)、常规修复(CP 38.25%)，而基础与预防牙科(BSPD 1.04%)几乎无风险。S2 却集中在全身健康/药理安全(SHPS 均值 14.15%，MiniMax-M2.7 达 28.57%)、麻醉急救(AME 8.93%)、儿科(PD 6.33%)——即可逆风险高与严重风险高的专科并不重合。", "analysis": "本节把'31.01% unsafe'拆成可行动的专科-严重度矩阵，是方法论上的重要贡献。值得注意的是，高 S1(如 Ortho)与高 S2(如 SHPS)分离，意味着仅凭总体 unsafe 率无法识别最危险的临床情境，评测与监管都应分别追踪两类风险。"}, {"heading": "2.7 Case Study", "number": "2.7", "page": 8, "level": 3, "summary": "以一个 L3 病例(66 岁男性、26 牙反复脓肿)演示 CBQ 评测流程：模型需整合牙髓、牙周、修复多因素。Gemini-3-Flash-Preview 正确识别'真性牙周-牙髓联合病变'并给出分阶段多学科方案；裁判按 5 个关键点比对得 80/100，尽管一处未对齐(额外建议探查性翻瓣排除根折)，但因未引入有害建议仍判为 S0。", "analysis": "案例直观展示了评测不仅看最终答案，也看中间推理与安全。但它只是一个成功案例，无法代表 31.01% unsafe 的分布；其价值在于说明评分 rubric(关键点 + 安全分级)如何运作，而非证明模型整体安全。"}, {"heading": "3 Discussion", "number": "3", "page": 8, "level": 2, "summary": "讨论凝练三点贡献(填补牙科评测空白、可扩展构造、可信评测)，并重申核心信号：模型在 MCQ/SAQ 尚可，在 CBQ/L3 急剧退化，说明当前 LLM 更擅长检索与复现结构化知识，在真实模糊情境下不可靠。论文将其与医学 LLM 的既有研究对照，主张'考试高分≠临床就绪'，并强调部署前需严格验证。", "analysis": "讨论的 interpretation 与证据一致，未过度外推。一个未充分展开的点：论文提出框架'可迁移至其他医学专科'，但全文未给出任何迁移实证，属于被声明但未验证的主张，应标记为 speculation 而非已证实贡献。"}, {"heading": "4 Methods", "number": "4", "page": 18, "level": 2, "summary": "方法部分(4.1–4.4)交代数据来源、自动化构造流水线、评测协议与专家参与框架。所有材料来自授权/公开资源，六名资深牙医(平均临床 6.8 年)参与迭代优化与终验，时间为 2026-02-05 至 03-25，共 297 人时。", "analysis": "方法学透明度较高：数据源、流水线、评测协议、专家投入均给出可审计细节。主要可复现性短板在 CBQ 原始数据因版权不公开(仅提供题名)，外部只能复现流程而不能复现数字——这是医学基准常见的版权与伦理权衡。"}, {"heading": "4.1 Data Curation", "number": "4.1", "page": 18, "level": 3, "summary": "说明三类题型的来源与筛选：(1) MCQ 来自澳/新/加/印/英/美官方执业考试；(2) SAQ 来自按学术影响力筛选的权威教材；(3) CBQ 来自 2020–2025 年 Scopus 高影响期刊(JADA、IJOMS 等)系统检索的病例报告。全部材料按联合国 M49 标准归属到 88 国/地区，多为 PDF/Word，进入后续流水线。", "analysis": "数据溯源清晰且有地理多样性设计。潜在偏差：(1) 来源以英语国家/英语期刊为主，非英语牙科知识体系覆盖存疑；(2) 地理归属在来源不明时按作者单位等启发式推断，可能引入噪声；(3) CBQ 来自已发表病例报告，可能偏向'有趣/典型'而非真实分布。"}, {"heading": "4.2 Agent Pipeline for Benchmark Construction", "number": "4.2", "page": 19, "level": 3, "summary": "提出三阶段自动化流水线以应对异质材料的规模化构造：阶段一文档归一化、阶段二类型感知构造、阶段三统一标注与终验。设计目标是把 PDF/图片/Office/XML 等统一为标准基准样本，并作为可迁移到其他专科的复用框架。", "analysis": "流水线是论文的工程核心，价值在于'type-aware'策略与内置 self-correction/质量控制。限制：(1) 对 CBQ 这类非结构化材料，生成阶段可能引入幻觉，仅靠 3 轮 self-correction 与 30% 人工审计兜底；(2) 可迁移性声明缺乏跨专科实证。其有效性由 4.4 的专家验收数字(99.98%/96.78%)间接支撑。"}, {"heading": "4.2.1 Stage I: Document Normalization", "number": "4.2.1", "page": 19, "level": 4, "summary": "阶段一由 Reformat Agent 归一化异质材料：对 XML 用 BeautifulSoup 保留结构，对 PDF/图片用 DeepSeek-OCR2 恢复文本，对多数文本文件用 Pandoc 转换；统一转为 markdown 并补充标题/来源/作者等文档级元数据，建立统一中间表示。", "analysis": "归一化是后续质量的基础。OCR 步骤(DeepSeek-OCR2)对扫描版试卷/教材的识别误差会沿流水线传播，论文未报告 OCR 准确率，是潜在的未量化误差源。"}, {"heading": "4.2.2 Stage II: Type-aware Benchmark Construction", "number": "4.2.2", "page": 19, "level": 4, "summary": "阶段二由 Extract Agent 按题型构造样本：内容先分块以防上下文截断；MCQ 重排为标准选项+参考答案，SAQ 抽取问答对，CBQ 从病例叙述生成临床问题并同时抽取 5 个关键点。每样本最多 3 轮 self-correction，CBQ 验证更严格(忠实性、需临床推理、无歧义可答)。", "analysis": "CBQ 同时产出的 5 个关键点是后续 rubric 评分的基础，设计合理。self-correction 上限 3 轮、失败即丢弃，可能系统性剔除'难生成但合理'的样本，造成轻微的选择偏差，但有利于保真。"}, {"heading": "4.2.3 Stage III: Unified Tagging and Final Verification", "number": "4.2.3", "page": 19, "level": 4, "summary": "阶段三由 Tag Agent 按'牙科专科 + 推理层级'双维标注：两轮独立预测一致则保留，否则触发第三轮多数投票。随后 self-correction 终验(忠实性、标签一致性、满足构造标准)，失败重生成最多 3 轮；资深牙医做最终质量保障。", "analysis": "多轮一致性投票降低了单轮标注噪声，但标签本质仍是模型生成+专家抽检，并非全量专家标注，边界题(如 L2/L3 临界)的标签可信度低于全专家标注。这是 2.6 之外另一个'标签噪声'来源。"}, {"heading": "4.3 Evaluation Protocol", "number": "4.3", "page": 21, "level": 3, "summary": "评测按题型定制：MCQ 仅输出最终选项并精确匹配；SAQ 由裁判模型二元判分；CBQ 用同一裁判但改为 5 关键点×20 分的 rubric 计分(满分 100)，并叠加 S0/S1/S2 安全分级。统一模板与 temperature=0.1，无模型特定调优；裁判选 Gemini-3-Flash-Preview(一致性稳定且成本低)。评测 12 个前沿模型(商业+开源各 6)。", "analysis": "CBQ 的 rubric 打分比单纯对错更可解释，安全分级使评测具备风险感知。主要方法论风险在 LLM-as-Judge：即便裁判与专家 98.15% 一致，其在 S2(不可逆伤害)这类高风险判定上的误差代价最高，且裁判自身也可能犯错——作者用专家校准部分缓解，但未给出 S2 的裁判-专家专项一致率。"}, {"heading": "4.4 Expert-in-the-Loop Framework", "number": "4.4", "page": 21, "level": 3, "summary": "说明六名 board-certified 牙医(平均 6.8 年)的全流程参与：数据来源认证与分类法制定、agent 流水线迭代优化(MCQ/SAQ 全量复核达 99.98%；CBQ 30% 抽审由 89.10% 提升至 96.78%)、评测框架校准(5 个候选裁判中 Gemini-3-Flash-Preview 专家接受率最高 98.15%，牙医互评 96.67%)。总投入 297 人时(33 个工作日，人均 1.5 小时/日)。", "analysis": "Expert-in-the-Loop 是'可信'主张的支柱。两点需注意：(1) 97.88% 的 Kimi-K2.5 与 94.05% 的 Doubao 也接近专家，说明裁判选择空间大，但不同裁判可能改变 CBQ 分数绝对值；(2) 297 人时是显著成本，意味着该范式对小团队复现门槛较高，除非自动化标注足够稳健。"}], "generated_at": "2026-07-19T10:15:00+0800", "built_at": "2026-07-19T10:45:00+0800"};
+
+  // ── prose (multi-paragraph) fields ──
+  // These render as <p> blocks so \n\n in the text shows as real paragraphs.
+  // writeProse/readProse keep the round-trip lossless (text ⇄ <p> DOM).
+  var PROSE_FIELDS = {
+    objective:1, problem_landscape:1, approach:1, impact:1,
+    cost:1, experiments_results:1, relevance_to_my_work:1, custom_notes:1,
+    guide_background:1, guide_question:1, guide_approach:1,
+    guide_findings:1, guide_insight:1, guide_limitations:1
+  };
+  function isProseField(f){ return PROSE_FIELDS[f] === 1; }
+  // Lightweight, safe inline markdown. HTML is escaped first so raw tags can't
+  // inject; LaTeX delimiters ($…$, \(…\), $$…$$, \[…\]) survive untouched for
+  // MathJax to typeset afterwards. Works the same in every prose module,
+  // section summary/analysis, and quote block.
+  function mdInline(s){
+    s = String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+    s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    // Italic uses * only (not _), because _ is ubiquitous in LaTeX
+    // subscripts (x_i, _{i=1}) and would otherwise be mangled.
+    s = s.replace(/(^|[^*])\*([^*\s][^*]*?)\*/g, '$1<em>$2</em>');
+    s = s.replace(/\[([^\]]+)\]\(([^)\s]+(?:\([^)]*\)[^)\s]*)*)\)/g, function(full, label, url){
+      var scheme = '';
+      var match = String(url).match(/^([a-z][a-z0-9+.-]*):/i);
+      scheme = match ? match[1].toLowerCase()+':' : '';
+      if (scheme && ['http:','https:','mailto:'].indexOf(scheme) < 0) return full;
+      var safeUrl = url.replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/[\r\n]/g,'');
+      return '<a href="'+safeUrl+'" target="_blank" rel="noopener noreferrer">'+label+'</a>';
+    });
+    return s;
+  }
+  // Display renderer: markdown + leaves math for MathJax. Stores raw source in
+  // data-tex so a typeset <mjx-container> never corrupts what gets saved.
+  function writeProse(el, text){
+    if (!el) return;
+    var s = (text == null ? '' : String(text)).replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+    el.dataset.tex = s;
+    el.innerHTML = '';
+    var paras = s.split(/\n[ \t]*\n+/);
+    paras.forEach(function(para){
+      para = para.replace(/^\n+|\n+$/g,'');
+      if (!para.trim()) return;
+      var lines = para.split('\n');
+      var ordered = lines.map(function(ln){ return ln.match(/^\s*\d+[.)]\s+(.+?)\s*$/); });
+      var unordered = lines.map(function(ln){ return ln.match(/^\s*[-*+]\s+(.+?)\s*$/); });
+      if (lines.length && ordered.every(function(m){ return m; })) {
+        var ol = document.createElement('ol'); ol.className = 'markdown-list';
+        ordered.forEach(function(m){ var li=document.createElement('li'); li.innerHTML=mdInline(m[1]); ol.appendChild(li); });
+        el.appendChild(ol); return;
+      }
+      if (lines.length && unordered.every(function(m){ return m; })) {
+        var ul = document.createElement('ul'); ul.className = 'markdown-list';
+        unordered.forEach(function(m){ var li=document.createElement('li'); li.innerHTML=mdInline(m[1]); ul.appendChild(li); });
+        el.appendChild(ul); return;
+      }
+      var p = document.createElement('p');
+      lines.forEach(function(ln, i){
+        if (i > 0) p.appendChild(document.createElement('br'));
+        var span = document.createElement('span');
+        span.innerHTML = mdInline(ln);
+        while (span.firstChild) p.appendChild(span.firstChild);
+      });
+      el.appendChild(p);
+    });
+    // leave el empty when there is no content so the CSS placeholder shows
+  }
+  // Edit renderer: raw source (markdown + LaTeX) as plain, editable text.
+  function showSource(el, text){
+    if (!el) return;
+    var s = (text == null ? '' : String(text)).replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+    el.dataset.tex = s;
+    el.innerHTML = '';
+    var paras = s.split(/\n[ \t]*\n+/);
+    paras.forEach(function(para){
+      para = para.replace(/^\n+|\n+$/g,'');
+      if (!para.trim()) return;
+      var p = document.createElement('p');
+      var lines = para.split('\n');
+      lines.forEach(function(ln, i){
+        if (i > 0) p.appendChild(document.createElement('br'));
+        p.appendChild(document.createTextNode(ln));
+      });
+      el.appendChild(p);
+    });
+  }
+  function readProse(el){
+    if (!el) return '';
+    // Prefer the preserved raw source (accurate even after MathJax typeset).
+    if (el.dataset.tex != null) {
+      return el.dataset.tex.replace(/\s+$/,'').trim();
+    }
+    var ps = el.querySelectorAll(':scope > p');
+    if (ps.length){
+      return Array.prototype.map.call(ps, function(p){
+        return p.innerText.replace(/\u00a0/g,' ').replace(/\s+$/,'').trim();
+      }).filter(function(t){ return t.length; }).join('\n\n');
+    }
+    return el.innerText.trim();
+  }
+
+  // ── path helpers ──
+  function getByPath(o, p){ return p.split(".").reduce(function(o,k){return o==null?o:o[k];},o); }
+  function setByPath(o, p, v){ var pts=p.split("."); var cur=o;
+    for(var i=0;i<pts.length-1;i++){var k=pts[i],nx=pts[i+1]; if(cur[k]==null)cur[k]=/^\d+$/.test(nx)?[]:{}; cur=cur[k];}
+    cur[pts[pts.length-1]]=v; }
+  function isListField(f){ return Array.isArray(getByPath(INITIAL,f)); }
+  function clone(o){ return JSON.parse(JSON.stringify(o)); }
+  function topOf(el){ return el.getBoundingClientRect().top + window.scrollY; }
+
+  function collectEdits(statusOverride){
+    var edits = {};
+    document.querySelectorAll('[data-field]').forEach(function(el){
+      var f = el.dataset.field;
+      if (f.indexOf('key_quotes.')===0) return;
+      if (isListField(f)) {
+        var items=[]; el.querySelectorAll('li').forEach(function(li){ var t=li.innerText.trim(); if(t)items.push(t); });
+        setByPath(edits,f,items);
+      } else if (isProseField(f)) {
+        setByPath(edits,f,readProse(el));
+      } else { setByPath(edits,f,el.innerText.trim()); }
+    });
+    var quotes=[];
+    document.querySelectorAll('.quote-block').forEach(function(b){
+      var tEl=b.querySelector('.quote-text'), nEl=b.querySelector('.quote-note'), m=b.querySelector('.quote-meta');
+      var qt = (tEl && tEl.dataset.tex != null) ? tEl.dataset.tex.trim() : (tEl ? tEl.innerText.trim() : "");
+      var qn = (nEl && nEl.dataset.tex != null) ? nEl.dataset.tex.trim() : (nEl ? nEl.innerText.trim() : "");
+      quotes.push({text:qt,note:qn,page:m?m.dataset.page:"",color:m?m.dataset.color:""});
+    });
+    if (quotes.length || (INITIAL.key_quotes&&INITIAL.key_quotes.length)) edits.key_quotes=quotes;
+    var secArr = collectSections();
+    if (secArr.length || (INITIAL.sections&&INITIAL.sections.length)) edits.sections = secArr;
+    Object.keys(INITIAL).forEach(function(k){ if(!(k in edits)) edits[k]=INITIAL[k]; });
+    edits.module_notes = collectModuleNotes();   // per-module marginalia
+    edits.status = statusOverride || currentStatus;
+    edits.exported_at = new Date().toISOString();
+    edits.zotero_key = ZKEY;
+    edits.schema_version = INITIAL.schema_version || 3;
+    return edits;
+  }
+
+  var saveDot = document.getElementById('saveDot');
+  function markDirty(){ saveDot.className='save-dot is-dirty'; }
+  function markSaved(){ saveDot.className='save-dot is-saved'; setTimeout(function(){saveDot.className='save-dot';},1200); }
+  function markSynced(){ saveDot.className='save-dot is-synced'; }
+
+  // ── localStorage save ──
+  function saveToLS(statusOverride){
+    var edits = collectEdits(statusOverride);
+    try { localStorage.setItem(LS_KEY, JSON.stringify(edits)); } catch(e){}
+    return edits;
+  }
+  function saveEdits(){
+    var edits = saveToLS();
+    if (dirHandle) { writeToFile(edits); } else { markSaved(); }
+  }
+  var saveTimer=null;
+  document.addEventListener('input', function(e){
+    var t=e.target;
+    if (t && t.classList && t.classList.contains('note-area')){
+      markDirty(); clearTimeout(saveTimer); saveTimer=setTimeout(saveEdits,800); updateNotesCount(); return;
+    }
+    if (t && t.hasAttribute && t.hasAttribute('contenteditable')){
+      markDirty(); clearTimeout(saveTimer); saveTimer=setTimeout(saveEdits,800);
+    }
+  });
+  document.addEventListener('keydown', function(e){ if((e.metaKey||e.ctrlKey)&&e.key==='s'){e.preventDefault();saveEdits();} });
+
+  // ── File System Access API: sync to folder ──
+  var dirHandle = null;
+  var IDB_NAME = 'litreader-fs', IDB_STORE = 'handles';
+
+  function idbGet(key){
+    return new Promise(function(resolve){
+      try {
+        var r = indexedDB.open(IDB_NAME, 1);
+        r.onupgradeneeded = function(e){ e.target.result.createObjectStore(IDB_STORE); };
+        r.onsuccess = function(e){
+          var db = e.target.result;
+          if (!db.objectStoreNames.contains(IDB_STORE)) { resolve(null); return; }
+          var tx = db.transaction(IDB_STORE,'readonly').objectStore(IDB_STORE).get(key);
+          tx.onsuccess = function(){ resolve(tx.result||null); };
+          tx.onerror = function(){ resolve(null); };
+        };
+        r.onerror = function(){ resolve(null); };
+      } catch(e){ resolve(null); }
+    });
+  }
+  function idbSet(key, val){
+    return new Promise(function(resolve){
+      try {
+        var r = indexedDB.open(IDB_NAME, 1);
+        r.onupgradeneeded = function(e){ e.target.result.createObjectStore(IDB_STORE); };
+        r.onsuccess = function(e){
+          var db = e.target.result; var tx = db.transaction(IDB_STORE,'readwrite');
+          tx.objectStore(IDB_STORE).put(val, key); tx.oncomplete=function(){resolve(true);}; tx.onerror=function(){resolve(false);};
+        };
+      } catch(e){ resolve(false); }
+    });
+  }
+  function isFsApi(){ return 'showDirectoryPicker' in window; }
+
+  async function writeToFile(edits){
+    if (!dirHandle) return;
+    try {
+      var target = dirHandle;
+      try { target = await dirHandle.getDirectoryHandle('papers', {create:false}); } catch(e){ target = dirHandle; }
+      var fh = await target.getFileHandle(ZKEY + '.edits.json', {create:true});
+      var w = await fh.createWritable();
+      await w.write(JSON.stringify(edits, null, 2));
+      await w.close();
+      markSynced();
+    } catch(err) {
+      toast('写文件失败：'+err.message);
+      markSaved();
+    }
+  }
+
+  async function connectFolder(){
+    if (!isFsApi()) { toast('当前浏览器不支持 File System Access API；请用 Export JSON 手动导出'); return; }
+    try {
+      var dh = await window.showDirectoryPicker({mode:'readwrite'});
+      dirHandle = dh;
+      await idbSet(LS_DIR, dh);
+      var btn = document.getElementById('btnSync');
+      btn.textContent = 'Synced ✓'; btn.classList.add('is-connected');
+      markSynced();
+      saveEdits();
+      toast('已连接文件夹，编辑与状态将自动写入 ' + ZKEY + '.edits.json');
+    } catch(err) { /* user cancelled */ }
+  }
+  document.getElementById('btnSync').addEventListener('click', connectFolder);
+
+  (async function(){
+    if (!isFsApi()) return;
+    var stored = await idbGet(LS_DIR);
+    if (stored) {
+      var perm = await stored.queryPermission({mode:'readwrite'});
+      if (perm === 'granted') {
+        dirHandle = stored;
+        var btn = document.getElementById('btnSync');
+        btn.textContent = 'Synced ✓'; btn.classList.add('is-connected');
+        markSynced();
+      } else if (perm === 'prompt') {
+        var btn2 = document.getElementById('btnSync');
+        btn2.textContent = 'Reconnect Folder';
+      }
+    }
+  })();
+
+  // ── load + apply ──
+  function collectSections(){
+    var arr=[];
+    document.querySelectorAll('.sec-card').forEach(function(card){
+      var sumEl=card.querySelector('.sec-summary');
+      var anaEl=card.querySelector('.sec-analysis');
+      arr.push({
+        heading: card.dataset.heading||"",
+        page: card.dataset.page||"",
+        level: card.classList.contains('lvl3')?3:2,
+        synthetic: card.dataset.synthetic?true:false,
+        summary: sumEl?readProse(sumEl):"",
+        analysis: anaEl?readProse(anaEl):""
+      });
+    });
+    return arr;
+  }
+  function applySectionsToDom(secArr){
+    if (!secArr || !secArr.length) return;
+    document.querySelectorAll('.sec-card').forEach(function(card){
+      var idx=parseInt(card.dataset.index,10);
+      var s=secArr[idx];
+      if(!s) return;
+      var sumEl=card.querySelector('.sec-summary');
+      var anaEl=card.querySelector('.sec-analysis');
+      if(sumEl && s.summary!=null) writeProse(sumEl, s.summary);
+      if(anaEl && s.analysis!=null) writeProse(anaEl, s.analysis);
+    });
+  }
+  function collectModuleNotes(){
+    var obj = {};
+    document.querySelectorAll('.note-area').forEach(function(ta){
+      var v = ta.value.trim();
+      if (v) obj[ta.dataset.module] = v;
+    });
+    return obj;
+  }
+  function applyModuleNotes(edits){
+    var mn = edits.module_notes || {};
+    document.querySelectorAll('.note-area').forEach(function(ta){
+      var v = mn[ta.dataset.module];
+      if (v != null) ta.value = v;
+    });
+  }
+  function applyEditsToDom(edits){
+    document.querySelectorAll('[data-field]').forEach(function(el){
+      var f=el.dataset.field;
+      if (f.indexOf('key_quotes.')===0){
+        var m=f.match(/^key_quotes\.(\d+)\.(text|note)$/);
+        if(m){ var q=(edits.key_quotes||[])[parseInt(m[1],10)]; if(q) writeProse(el, q[m[2]]||""); }
+        return;
+      }
+      if (isListField(f)) {
+        var arr=getByPath(edits,f)||[]; el.innerHTML=''; arr.forEach(function(it){var li=document.createElement('li'); li.innerHTML=mdInline(it); el.appendChild(li);});
+      } else if (isProseField(f)) {
+        var vp=getByPath(edits,f); if(vp!=null) writeProse(el, vp);
+      } else { var v=getByPath(edits,f); if(v!=null) el.innerText=v; }
+    });
+    applySectionsToDom(edits.sections);
+    applyModuleNotes(edits);
+  }
+
+  // ── export / import ──
+  function toast(msg){ var t=document.getElementById('toast'); t.textContent=msg; t.classList.add('is-visible'); setTimeout(function(){t.classList.remove('is-visible');},2400); }
+  document.getElementById('btnExport').addEventListener('click', function(){
+    saveToLS(); var edits=collectEdits();
+    var blob=new Blob([JSON.stringify(edits,null,2)],{type:'application/json'});
+    var url=URL.createObjectURL(blob); var a=document.createElement('a');
+    a.href=url; a.download=ZKEY+'.edits.json'; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url); toast('已导出 '+ZKEY+'.edits.json');
+  });
+  var importInput=document.getElementById('importInput');
+  document.getElementById('btnImport').addEventListener('click', function(){ importInput.click(); });
+  importInput.addEventListener('change', function(e){
+    var file=e.target.files[0]; if(!file) return;
+    var reader=new FileReader();
+    reader.onload=function(ev){
+      try { var edits=JSON.parse(ev.target.result); localStorage.setItem(LS_KEY,JSON.stringify(edits));
+        if (edits.status) setStatus(edits.status, false);
+        applyEditsToDom(edits); updateNotesCount(); toast('已导入编辑'); markSaved();
+        if (dirHandle) writeToFile(edits);
+      } catch(err){ toast('导入失败：'+err.message); }
+    };
+    reader.readAsText(file); importInput.value='';
+  });
+
+  // ── status ──
+  var currentStatus = "reading" || "reading";
+  function setStatus(s, persist){
+    currentStatus = s;
+    document.querySelectorAll('.status-btn').forEach(function(b){ b.classList.toggle('is-active', b.dataset.status===s); });
+    if (persist) {
+      var edits = saveToLS(s);
+      if (dirHandle) writeToFile(edits);
+      toast('Status → '+s+'；已写入 '+ZKEY+'.edits.json');
+    }
+  }
+  document.querySelectorAll('.status-btn').forEach(function(b){
+    b.addEventListener('click', function(){ setStatus(b.dataset.status, true); });
+  });
+  var storedEdits = null;
+  try { storedEdits = localStorage.getItem(LS_KEY) ? JSON.parse(localStorage.getItem(LS_KEY)) : null; } catch(e){}
+  var savedStatus = (storedEdits && storedEdits.status) || "reading" || "reading";
+  try { var ls = localStorage.getItem(LS_STATUS); if (ls) savedStatus = ls; } catch(e){}
+  currentStatus = savedStatus;
+  setStatus(currentStatus, false);
+
+  // ── accent theme switcher ──
+  var accentDots = document.querySelectorAll('.accent-dot');
+  function setAccent(a, persist){
+    document.body.setAttribute('data-accent', a);
+    accentDots.forEach(function(d){ d.classList.toggle('is-active', d.dataset.accent === a); });
+    if (persist) { try { localStorage.setItem(LS_ACCENT, a); } catch(e){} }
+  }
+  var savedAccent = "blue";
+  try { var sa = localStorage.getItem(LS_ACCENT); if (sa) savedAccent = sa; } catch(e){}
+  setAccent(savedAccent, false);
+  accentDots.forEach(function(d){
+    d.addEventListener('click', function(){ setAccent(d.dataset.accent, true); });
+  });
+
+  // ── progress rail ──
+  function onProgress(){
+    var h = document.documentElement.scrollHeight - window.innerHeight;
+    var p = h > 0 ? (window.scrollY / h) * 100 : 0;
+    var rail = document.getElementById('progressRail');
+    if (rail) rail.style.width = p + '%';
+  }
+  window.addEventListener('scroll', onProgress, {passive:true});
+  window.addEventListener('resize', onProgress, {passive:true});
+
+  // ── left TOC + scroll-spy (shared with notes) ──
+  function buildNav(){
+    var toc = document.getElementById('toc');
+    if (!toc) return;
+    var list = document.createElement('div'); list.className='toc-list';
+    var modules = Array.prototype.slice.call(document.querySelectorAll('.module'));
+    if (!modules.length) { toc.style.display='none'; return; }
+
+    var mainLinks = [], subLinks = [], noteCards = [], navTargets = [];
+    modules.forEach(function(mod){
+      var id = mod.id;
+      var h2 = mod.querySelector('.sec-h');
+      var idx = h2.querySelector('.sec-index') ? h2.querySelector('.sec-index').textContent : '';
+      var name = h2.querySelector('.sec-name') ? h2.querySelector('.sec-name').textContent : h2.textContent;
+      var a = document.createElement('a');
+      a.className='toc-link'; a.href='#'+id; a.dataset.module=id;
+      a.innerHTML = '<span class="toc-num">'+idx+'</span><span class="toc-label">'+name+'</span>';
+      list.appendChild(a);
+      mainLinks.push(a);
+      navTargets.push({id:id, el:mod, type:'main'});
+      // sub-modules (only meaningful under 09, but generic)
+      mod.querySelectorAll('.submod > h3').forEach(function(h3){
+        if (!h3.id) h3.id = id + '-' + h3.textContent.replace(/\s+/g,'-');
+        var sa = document.createElement('a');
+        sa.className='toc-sublink'; sa.href='#'+h3.id; sa.dataset.sub=h3.id;
+        sa.innerHTML = '<span class="toc-subnum">·</span><span class="toc-sublabel">'+h3.textContent+'</span>';
+        list.appendChild(sa);
+        subLinks.push(sa);
+        navTargets.push({id:h3.id, el:h3, type:'sub'});
+      });
+    });
+    toc.appendChild(list);
+
+    noteCards = Array.prototype.slice.call(document.querySelectorAll('.note-card'));
+
+    navTargets.sort(function(a,b){ return topOf(a.el) - topOf(b.el); });
+    var linkMap = {}; mainLinks.forEach(function(l){ linkMap[l.dataset.module]=l; });
+    var subMap = {}; subLinks.forEach(function(l){ subMap[l.dataset.sub]=l; });
+
+    function onScroll(){
+      var pos = window.scrollY + 130;
+      var active = navTargets[0];
+      navTargets.forEach(function(t){ if (topOf(t.el) <= pos) active = t; });
+      mainLinks.forEach(function(l){ l.classList.remove('is-active'); });
+      subLinks.forEach(function(l){ l.classList.remove('is-active'); });
+      noteCards.forEach(function(n){ n.classList.remove('is-active'); });
+      if (active) {
+        if (active.type === 'main') {
+          var lk = linkMap[active.id]; if (lk) lk.classList.add('is-active');
+        } else {
+          var sl = subMap[active.id]; if (sl) sl.classList.add('is-active');
+          var pm = active.el.closest('.module');
+          if (pm) { var lk2 = linkMap[pm.id]; if (lk2) lk2.classList.add('is-active'); }
+        }
+        var modEl = active.type === 'main' ? active.el : active.el.closest('.module');
+        noteCards.forEach(function(n){ n.classList.toggle('is-active', n.dataset.module === modEl.id); });
+      }
+    }
+    window.addEventListener('scroll', onScroll, {passive:true});
+    window.addEventListener('resize', onScroll, {passive:true});
+    onScroll();
+  }
+
+  // ── note jump + section → note focus ──
+  function wireNotes(){
+    document.querySelectorAll('.note-jump').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var el = document.getElementById(btn.dataset.target);
+        if (el) el.scrollIntoView({behavior:'smooth', block:'start'});
+      });
+    });
+    document.querySelectorAll('.sec-h').forEach(function(h2){
+      h2.addEventListener('click', function(){
+        var mod = h2.closest('.module'); if (!mod) return;
+        var card = document.querySelector('.note-card[data-module="'+mod.id+'"]');
+        if (card) card.scrollIntoView({behavior:'smooth', block:'center'});
+      });
+    });
+  }
+
+  function updateNotesCount(){
+    var n = 0;
+    document.querySelectorAll('.note-area').forEach(function(ta){ if (ta.value.trim()) n++; });
+    var el = document.getElementById('notesCount');
+    if (el) el.textContent = n;
+  }
+
+  // ── math typeset (MathJax) ──
+  // Typeset the whole document. Called on init (guarded) and again by the
+  // MathJax startup promise once the library is ready.
+  function litTypeset(){
+    if (window.MathJax && MathJax.typesetPromise) {
+      try { MathJax.typesetPromise().catch(function(){}); } catch(e){}
+    }
+  }
+  window.litTypeset = litTypeset;
+
+  // Editable fields (summaries, quotes) must stay plaintext while the user is
+  // typing, but render math on blur. We keep the raw source in data-tex so the
+  // typeset <mjx-container> never corrupts what gets saved.
+  // Every editable field (the 8 prose modules, section summaries/analyses, and
+  // quote blocks) shares one round-trip: focus shows the raw markdown+LaTeX
+  // source so it's editable; blur re-renders markdown and re-typesets math.
+  // The raw source is always preserved in data-tex, so what gets saved to
+  // localStorage / edits.json is never the rendered <strong>/<mjx-container>.
+  function wireEditable(){
+    document.querySelectorAll('[data-field].editable, .quote-text, .quote-note, .sec-summary, .sec-analysis')
+      .forEach(function(el){
+        el.addEventListener('focus', function(){
+          if (el.dataset.tex != null) showSource(el, el.dataset.tex);
+        });
+        el.addEventListener('input', function(){
+          if (el.dataset.tex != null) el.dataset.tex = el.innerText;
+        });
+        el.addEventListener('blur', function(){
+          if (el.dataset.tex != null) writeProse(el, el.dataset.tex);
+          if (window.MathJax && MathJax.typesetPromise) {
+            try { MathJax.typesetPromise([el]).catch(function(){}); } catch(e){}
+          }
+        });
+      });
+  }
+
+  // ── lightbox for figures ──
+  function wireLightbox(){
+    var overlay = document.getElementById('lbOverlay');
+    var img = document.getElementById('lbImg');
+    var cap = document.getElementById('lbCaption');
+    var closeBtn = document.getElementById('lbClose');
+    if (!overlay || !img) return;
+    function open(src, caption){
+      img.src = src; cap.textContent = caption || '';
+      overlay.classList.add('is-open'); overlay.setAttribute('aria-hidden','false');
+    }
+    function close(){
+      overlay.classList.remove('is-open'); overlay.setAttribute('aria-hidden','true');
+      img.src = '';
+    }
+    document.querySelectorAll('.figure-card').forEach(function(card){
+      card.addEventListener('click', function(){
+        var im = card.querySelector('img'); if (!im) return;
+        var meta = card.querySelector('.figure-meta');
+        var caption = meta ? meta.innerText.replace(/\s+/g,' ').trim() : '';
+        open(im.getAttribute('src'), caption);
+      });
+    });
+    overlay.addEventListener('click', function(e){
+      if (e.target === overlay || e.target === closeBtn) close();
+    });
+    closeBtn.addEventListener('click', close);
+    document.addEventListener('keydown', function(e){
+      if (e.key === 'Escape' && overlay.classList.contains('is-open')) close();
+    });
+  }
+
+  // ── init ──
+  // A rebuild bumps INITIAL.built_at. A stale localStorage snapshot from an
+  // older build (or a pre-fix broken sync) is discarded in favour of the
+  // freshly-built embedded data, so fixes always take effect on reload.
+  // A same-build localStorage copy (the user's own unsynced edits) is kept.
+  var stored = null;
+  try { stored = localStorage.getItem(LS_KEY); } catch(e){}
+  var storedObj = null;
+  try { storedObj = stored ? JSON.parse(stored) : null; } catch(e){ storedObj = null; }
+  var embeddedBuiltAt = (INITIAL && INITIAL.built_at) || null;
+  var storedBuiltAt = (storedObj && storedObj.built_at) || null;
+  if (storedObj && embeddedBuiltAt && storedBuiltAt && storedBuiltAt === embeddedBuiltAt) {
+    applyEditsToDom(storedObj);
+  } else {
+    applyEditsToDom(INITIAL);
+  }
+  buildNav();
+  wireNotes();
+  wireEditable();
+  wireLightbox();
+  updateNotesCount();
+  onProgress();
+  litTypeset();   // no-op until MathJax is ready; startup promise re-runs it
+})();
+</script>
+
+</body>
+</html>

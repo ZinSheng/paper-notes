@@ -1,0 +1,49 @@
+{
+  "zotero_key": "7I8WCZ7K",
+  "pdf_attachment_key": "HJQ9Q99B",
+  "pdf_source": "local:/Users/ziyingsheng/Zotero/storage/HJQ9Q99B/Zhao 等 - 2026 - GlobalDentBench A Multinational Benchmark for Evaluating LLM Clinical Reasoning in Dentistry with E.pdf",
+  "count": 5,
+  "figures": [
+    {
+      "index": 1,
+      "filename": "7I8WCZ7K_fig01.jpeg",
+      "page": 13,
+      "width": 12039,
+      "height": 14440,
+      "bytes": 8347674
+    },
+    {
+      "index": 2,
+      "filename": "7I8WCZ7K_fig02.jpeg",
+      "page": 14,
+      "width": 8600,
+      "height": 5483,
+      "bytes": 1680301
+    },
+    {
+      "index": 3,
+      "filename": "7I8WCZ7K_fig03.jpeg",
+      "page": 14,
+      "width": 15170,
+      "height": 5788,
+      "bytes": 6776970
+    },
+    {
+      "index": 4,
+      "filename": "7I8WCZ7K_fig04.jpeg",
+      "page": 15,
+      "width": 8832,
+      "height": 8449,
+      "bytes": 6227044
+    },
+    {
+      "index": 5,
+      "filename": "7I8WCZ7K_fig05.jpeg",
+      "page": 17,
+      "width": 12085,
+      "height": 13394,
+      "bytes": 5584840
+    }
+  ],
+  "image_dir": "papers/7I8WCZ7K_images/"
+}

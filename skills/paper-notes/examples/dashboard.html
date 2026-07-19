@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>文献精读总览 — Reading Dashboard</title>
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --accent-light: #F5B7AB;
+    --accent-mid:   #ED7E7D;
+    --accent-deep:  #C73B41;
+    --accent-tint:  #FDF6F4;
+    --accent-mid-rgb: 237,126,125;
+    --ink:        #423F3D;
+    --ink-soft:   #6E655E;
+    --ink-faint:  #7E756D;
+    --rule:       #EEE8E4;
+    --rule-lit:   #F5F0EC;
+    --bg:         #FFFFFF;
+    --bg-soft:    #FAFAF8;
+    --bg-info:    #FDFCFB;
+
+    --font-body: "Hanken Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+    --font-display: "Spectral", Georgia, "Times New Roman", "Noto Serif SC", "Songti SC", serif;
+    --font-mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+
+    --w-main: 1000px;
+    --gx: clamp(24px, 5vw, 56px);
+
+    /* heatmap intensity levels (none → deep pink) */
+    --hm-0: #F5F0EC;
+    --hm-1: #FCE4E0;
+    --hm-2: #F7B5AC;
+    --hm-3: #F08A7E;
+    --hm-4: #E25648;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 16px; scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+  body {
+    font-family: var(--font-body);
+    background: var(--bg); color: var(--ink);
+    line-height: 1.72; font-weight: 400;
+    -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  .progress-rail { position: fixed; top: 0; left: 0; right: 0; height: 1px; background: var(--rule-lit); z-index: 100; }
+  .progress-rail::after { content: ""; display: block; height: 100%; width: 100%; background: var(--accent-mid); }
+
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 24px var(--gx);
+    max-width: calc(var(--w-main) + var(--gx) * 2);
+    margin: 0 auto;
+  }
+  .tb-left { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-faint); font-weight: 500; }
+  .tb-left .tb-count { color: var(--accent-deep); }
+  .tb-right { display: flex; gap: 14px; align-items: center; }
+  .tb-link { font-size: 11px; letter-spacing: .10em; text-transform: uppercase; color: var(--ink-faint); text-decoration: none; font-weight: 500; border-bottom: 1px solid transparent; transition: color .2s, border-color .2s; }
+  .tb-link:hover { color: var(--accent-mid); border-bottom-color: var(--accent-mid); }
+
+  .page { max-width: calc(var(--w-main) + var(--gx) * 2); margin: 0 auto; padding: 0 var(--gx) 96px; }
+
+  .head { padding: 48px 0 40px; border-bottom: 1px solid var(--rule); margin-bottom: 48px; }
+  .head-overline { font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--accent-deep); font-weight: 600; margin-bottom: 20px; }
+  .head-title { font-size: clamp(30px, 5vw, 46px); font-family: var(--font-body); font-weight: 600; line-height: 1.14; letter-spacing: -.01em; color: var(--ink); margin-bottom: 14px; }
+  .head-meta { display: flex; flex-wrap: wrap; gap: 22px; margin-top: 24px; font-size: 13px; color: var(--ink-faint); }
+  .head-meta > div { display: flex; align-items: center; gap: 8px; }
+  .hm-dot { width: 6px; height: 6px; background: var(--accent-mid); border-radius: 50%; flex-shrink: 0; }
+  .hm-val { color: var(--ink); font-weight: 600; }
+
+  .body h2 { font-size: 22px; font-weight: 700; color: var(--ink); letter-spacing: -.015em; margin: 52px 0 18px; scroll-margin-top: 90px; }
+  .body h2 .h2-tag { display: block; font-size: 10.5px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; color: var(--accent-deep); margin-bottom: 10px; }
+
+  /* ── heatmap ── */
+  .heatmap-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .range-switch { display: inline-flex; gap: 0; border: 1px solid var(--rule); }
+  .range-btn {
+    font-size: 11px; letter-spacing: .06em; font-weight: 600; text-transform: uppercase;
+    color: var(--ink-faint); background: none; border: none; cursor: pointer;
+    padding: 5px 12px; font-family: var(--font-body); transition: all .15s;
+    border-right: 1px solid var(--rule);
+  }
+  .range-btn:last-child { border-right: none; }
+  .range-btn:hover { color: var(--ink-soft); }
+  .range-btn.is-active { color: var(--bg); background: var(--accent-deep); }
+  .heatmap-legend { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--ink-faint); font-family: var(--font-mono); }
+  .legend-cell { width: 12px; height: 12px; border-radius: 2px; }
+
+  .heatmap-wrap {
+    position: relative; overflow-x: auto; padding: 6px 0 8px;
+    border: 1px solid var(--rule); background: var(--bg);
+  }
+  .heatmap {
+    display: grid;
+    grid-auto-flow: column;
+    grid-template-rows: repeat(7, 14px);
+    grid-auto-columns: 14px;
+    gap: 3px;
+    padding: 8px 10px;
+    width: max-content;
+  }
+  .hm-cell { width: 14px; height: 14px; border-radius: 2px; background: var(--hm-0); cursor: pointer; transition: transform .1s; }
+  .hm-cell:hover { transform: scale(1.4); outline: 1px solid var(--ink); }
+  .hm-cell.lv-1 { background: var(--hm-1); }
+  .hm-cell.lv-2 { background: var(--hm-2); }
+  .hm-cell.lv-3 { background: var(--hm-3); }
+  .hm-cell.lv-4 { background: var(--hm-4); }
+
+  .hm-tooltip {
+    position: fixed; pointer-events: none; opacity: 0;
+    background: var(--ink); color: var(--bg);
+    padding: 8px 11px; font-size: 12px; line-height: 1.5;
+    max-width: 260px; z-index: 50; transition: opacity .12s; white-space: normal;
+  }
+  .hm-tooltip .ht-date { color: var(--accent-light); font-weight: 600; display: block; margin-bottom: 3px; font-family: var(--font-mono); font-size: 11px; }
+  .hm-tooltip .ht-mins { color: var(--ink-faint); font-size: 11px; }
+  .hm-tooltip .ht-papers { color: var(--bg); font-size: 12px; }
+
+  /* ── timeline ── */
+  .timeline-box { margin-top: 24px; padding: 22px 26px; border: 1px solid var(--rule); background: var(--bg); }
+  .timeline-box .tb-label { font-size: 10.5px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--accent-deep); margin-bottom: 14px; display: block; }
+  .timeline-list { list-style: none; padding: 0; margin: 0; }
+  .timeline-list li { position: relative; padding: 8px 0 8px 130px; font-size: 14px; line-height: 1.6; color: var(--ink); border-bottom: 1px solid var(--rule-lit); }
+  .timeline-list li:last-child { border-bottom: none; }
+  .timeline-list .tl-date { position: absolute; left: 0; top: 9px; font-family: var(--font-mono); font-size: 12px; color: var(--accent-deep); font-weight: 500; }
+  .timeline-list .tl-mins { color: var(--ink-faint); font-size: 12px; margin-left: 8px; font-family: var(--font-mono); }
+
+  /* ── collection groups ── */
+  .collection-group { margin-bottom: 44px; }
+  .collection-group h3 { font-size: 13px; font-weight: 600; color: var(--accent-deep); text-transform: uppercase; letter-spacing: .12em; margin: 0 0 18px; padding-bottom: 10px; border-bottom: 1px solid var(--rule); display: flex; align-items: baseline; gap: 10px; }
+  .collection-group h3 .cg-count { font-family: var(--font-mono); font-size: 12px; color: var(--ink-faint); font-weight: 400; text-transform: none; letter-spacing: 0; }
+
+  .paper-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+  .paper-card { display: block; text-decoration: none; color: var(--ink); border: 1px solid var(--rule); background: var(--bg); padding: 18px 20px; transition: all .18s; position: relative; }
+  .paper-card:hover { border-color: var(--accent-light); background: var(--accent-tint); }
+  .pc-status-dot { position: absolute; top: 18px; right: 18px; width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--rule); }
+  .pc-status-dot.reading { background: var(--accent-mid); }
+  .pc-status-dot.done { background: #8FB98A; }
+  .pc-status-dot.archived { background: var(--ink-faint); }
+  .pc-title { font-size: 15px; font-weight: 600; color: var(--ink); line-height: 1.4; margin-bottom: 8px; padding-right: 20px; }
+  .paper-card:hover .pc-title { color: var(--accent-mid); }
+  .pc-meta { font-size: 12px; color: var(--ink-faint); margin-bottom: 10px; font-family: var(--font-mono); }
+  .pc-stats { display: flex; gap: 14px; margin-bottom: 10px; font-size: 11.5px; color: var(--ink-faint); }
+  .pc-stats .ps-num { color: var(--accent-deep); font-weight: 600; font-family: var(--font-mono); }
+  .pc-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+  .pc-tag { font-size: 10.5px; color: var(--ink-soft); border: 1px solid var(--rule-lit); padding: 1px 7px; }
+
+  .empty-state { padding: 60px 20px; text-align: center; color: var(--ink-faint); font-style: italic; font-size: 14px; }
+  .footnav { display: flex; justify-content: space-between; align-items: center; padding: 40px 0 0; margin-top: 56px; border-top: 1px solid var(--rule); font-size: 12px; color: var(--ink-faint); letter-spacing: .06em; }
+
+  /* ── section head + view switch ── */
+  .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin: 52px 0 18px; flex-wrap: wrap; }
+  .section-head h2 { margin: 0; }
+  .view-switch { display: inline-flex; border: 1px solid var(--rule); }
+  .view-btn {
+    font-size: 11px; letter-spacing: .06em; font-weight: 600; text-transform: uppercase;
+    color: var(--ink-faint); background: none; border: none; cursor: pointer;
+    padding: 6px 14px; font-family: var(--font-body); transition: all .15s;
+    border-right: 1px solid var(--rule);
+  }
+  .view-btn:last-child { border-right: none; }
+  .view-btn:hover { color: var(--ink-soft); }
+  .view-btn.is-active { color: var(--bg); background: var(--accent-deep); }
+
+  /* ── nested collection tree ── */
+  .coll-tree { border: 1px solid var(--rule); background: var(--bg); }
+  .coll-node { border-bottom: 1px solid var(--rule-lit); }
+  .coll-node:last-child { border-bottom: none; }
+  .coll-header { display: flex; align-items: center; gap: 10px; padding: 12px 16px; cursor: pointer; user-select: none; }
+  .coll-header:hover { background: var(--bg-soft); }
+  .coll-arrow { width: 14px; text-align: center; color: var(--ink-faint); font-size: 11px; transition: transform .15s; flex-shrink: 0; }
+  .coll-node.coll-open > .coll-header .coll-arrow { transform: rotate(90deg); }
+  .coll-name { font-size: 14px; font-weight: 600; color: var(--ink); }
+  .coll-node.unfiled > .coll-header .coll-name { color: var(--ink-soft); font-weight: 500; }
+  .coll-count { font-family: var(--font-mono); font-size: 11px; color: var(--ink-faint); background: var(--bg-soft); border: 1px solid var(--rule-lit); padding: 1px 8px; border-radius: 10px; margin-left: auto; }
+  .coll-children { padding-left: 22px; border-top: 1px solid var(--rule-lit); }
+  .coll-node:not(.coll-open) > .coll-children { display: none; }
+  .coll-papers { padding: 16px; border-top: 1px solid var(--rule-lit); }
+  .coll-papers .paper-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+
+  /* ── table view ── */
+  .paper-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13.5px; }
+  .paper-table th { text-align: left; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--rule); background: var(--bg); white-space: nowrap; }
+  .paper-table td { padding: 10px; border-bottom: 1px solid var(--rule-lit); vertical-align: top; color: var(--ink); }
+  .paper-table tr:hover td { background: var(--accent-tint); }
+  .pt-title { font-weight: 600; color: var(--ink); text-decoration: none; }
+  .pt-title:hover { color: var(--accent-mid); }
+  .pt-meta { color: var(--ink-faint); font-family: var(--font-mono); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .paper-table th:nth-child(1), .paper-table td:nth-child(1) { width: 30%; }
+  .paper-table th:nth-child(2), .paper-table td:nth-child(2) { width: 20%; }
+  .paper-table th:nth-child(3), .paper-table td:nth-child(3) { width: 7%; }
+  .paper-table th:nth-child(4), .paper-table td:nth-child(4) { width: 18%; }
+  .paper-table th:nth-child(5), .paper-table td:nth-child(5) { width: 9%; }
+  .paper-table th:nth-child(6), .paper-table td:nth-child(6) { width: 7%; }
+  .paper-table th:nth-child(7), .paper-table td:nth-child(7) { width: 9%; }
+  .pt-authors { white-space: normal; overflow-wrap: anywhere; word-break: break-word; line-height: 1.45; }
+  .pt-path { color: var(--ink-soft); font-size: 12px; }
+  .status-badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 10px; white-space: nowrap; }
+  .status-badge.reading { background: var(--accent-tint); color: var(--accent-deep); }
+  .status-badge.done { background: #EDF3EC; color: #5E8B58; }
+  .status-badge.archived { background: var(--rule-lit); color: var(--ink-faint); }
+
+  /* ── list controls (search / sort / sync) ── */
+  .list-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .search-input { font-family: var(--font-body); font-size: 13px; padding: 7px 12px; border: 1px solid var(--rule); background: var(--bg); color: var(--ink); border-radius: 2px; min-width: 200px; }
+  .search-input:focus { outline: none; border-color: var(--accent-light); }
+  .sort-select { font-family: var(--font-body); font-size: 12px; padding: 7px 10px; border: 1px solid var(--rule); background: var(--bg); color: var(--ink-soft); border-radius: 2px; }
+  .tb-link.is-connected { color: #5E8B58; border-bottom-color: #5E8B58; }
+
+  /* ── read-only tags (table cell) ── */
+  .pt-tags { max-width: 280px; }
+
+  /* ── toast ── */
+  .toast { position: fixed; left: 50%; bottom: 32px; transform: translateX(-50%) translateY(20px); background: var(--ink); color: var(--bg); font-size: 13px; padding: 10px 18px; border-radius: 4px; opacity: 0; pointer-events: none; transition: all .25s; z-index: 50; }
+  .toast.is-visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  @media (max-width: 640px) {
+    .head { padding: 32px 0 28px; margin-bottom: 32px; }
+    .head-title { font-size: 26px; }
+    .paper-grid { grid-template-columns: 1fr; }
+  }
+  /* ── accent themes: <body data-accent="rose|green|blue"> ── */
+  [data-accent="green"] {
+    --accent-light: #B6DFC4; --accent-mid: #6FBF92; --accent-deep: #1F7A4F;
+    --accent-tint: #F1FAF4; --accent-mid-rgb: 111,191,146;
+    --hm-0: #F5F0EC; --hm-1: #E4F4EA; --hm-2: #B6DFC4; --hm-3: #6FBF92; --hm-4: #1F7A4F;
+  }
+  [data-accent="blue"] {
+    --accent-light: #AFD2EC; --accent-mid: #6BA6D4; --accent-deep: #286BA3;
+    --accent-tint: #F1F7FC; --accent-mid-rgb: 107,166,212;
+    --hm-0: #F5F0EC; --hm-1: #E4F1F8; --hm-2: #AFD2EC; --hm-3: #6BA6D4; --hm-4: #286BA3;
+  }
+
+  /* ── accent theme switcher ── */
+  .accent-group { display: inline-flex; gap: 6px; align-items: center; }
+  .accent-label { font-size: 11px; letter-spacing: .10em; text-transform: uppercase; color: var(--ink-faint); font-weight: 500; margin-right: 2px; }
+  .accent-dot { width: 16px; height: 16px; border-radius: 50%; cursor: pointer; border: 1px solid var(--rule); padding: 0; background: none; transition: transform .15s, box-shadow .15s; position: relative; }
+  .accent-dot::after { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--dot); }
+  .accent-dot[data-accent="rose"]  { --dot: #ED7E7D; }
+  .accent-dot[data-accent="green"] { --dot: #6FBF92; }
+  .accent-dot[data-accent="blue"]  { --dot: #6BA6D4; }
+  .accent-dot:hover { transform: scale(1.12); }
+  .accent-dot.is-active { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--dot); }
+
+  /* When the user opted out of Zotero, hide the reading-calendar module. */
+  body[data-zotero="off"] .module-zotero { display: none; }
+
+</style>
+</head>
+<body data-accent="blue" data-zotero="on">
+
+<div class="progress-rail"></div>
+
+<div class="topbar">
+  <div class="tb-left">READING DASHBOARD &middot; <span class="tb-count">7</span> PAPERS</div>
+  <div class="tb-right">
+    <div class="accent-group" id="accentGroup">
+      <span class="accent-label">Theme</span>
+      <button class="accent-dot" data-accent="rose" type="button" title="Rose"></button>
+      <button class="accent-dot" data-accent="green" type="button" title="Green"></button>
+      <button class="accent-dot" data-accent="blue" type="button" title="Blue"></button>
+    </div>
+    <a class="tb-link" href="papers/GlobalDentBench.html" id="latestLink">Latest Paper →</a>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="head">
+    <div class="head-overline">LITERATURE DASHBOARD</div>
+    <h1 class="head-title">文献精读总览</h1>
+    <div class="head-meta" id="statsRow"></div>
+  </header>
+
+  <article class="body">
+
+    <div class="module-zotero">
+    <h2><span class="h2-tag">阅读热力图</span>Reading Heatmap</h2>
+    <div class="heatmap-controls">
+      <div class="range-switch" id="rangeSwitch">
+        <button class="range-btn" data-range="90" type="button">3M</button>
+        <button class="range-btn" data-range="180" type="button">6M</button>
+        <button class="range-btn is-active" data-range="365" type="button">1Y</button>
+        <button class="range-btn" data-range="all" type="button">All</button>
+      </div>
+      <div class="heatmap-legend">
+        <span>Less</span>
+        <span class="legend-cell" style="background:var(--hm-0);"></span>
+        <span class="legend-cell" style="background:var(--hm-1);"></span>
+        <span class="legend-cell" style="background:var(--hm-2);"></span>
+        <span class="legend-cell" style="background:var(--hm-3);"></span>
+        <span class="legend-cell" style="background:var(--hm-4);"></span>
+        <span>More</span>
+      </div>
+    </div>
+    <div class="heatmap-wrap">
+      <div class="heatmap" id="heatmap"></div>
+    </div>
+    <div class="timeline-box">
+      <span class="tb-label">最近阅读 / Recent Reading</span>
+      <ol class="timeline-list" id="timelineList"></ol>
+    </div>
+    </div><!-- /module-zotero -->
+
+    <div class="section-head">
+      <h2><span class="h2-tag">按 Collection 分组</span>By Collection</h2>
+      <div class="list-controls">
+        <input id="searchInput" class="search-input" type="search" placeholder="搜索标题 / 作者…" />
+        <select id="sortSelect" class="sort-select" title="排序">
+          <option value="recent">最近阅读</option>
+          <option value="year">年份</option>
+          <option value="read">阅读时长</option>
+        </select>
+        <div class="view-switch" id="viewSwitch">
+          <button class="view-btn is-active" data-view="card" type="button">卡片视图</button>
+          <button class="view-btn" data-view="table" type="button">表格视图</button>
+        </div>
+      </div>
+    </div>
+    <div id="groupsContainer"></div>
+
+  </article>
+
+  <nav class="footnav">
+    <div>GENERATED 2026-07-19T10:12:58+0800 &middot; paper-notes</div>
+    <div>7 papers</div>
+  </nav>
+
+</div>
+
+<div class="hm-tooltip" id="hmTooltip"></div>
+
+<script>
+(function() {
+  var PAPERS   = [{"key":"GlobalDentBench","title":"GlobalDentBench: A Multinational Benchmark for Evaluating LLM Clinical Reasoning in Dentistry with Expert Calibration","authors":"Zhao, J. et al.","year":"2026","venue":"","status":"reading","tags":["Artificial Intelligence (cs.AI)","Computation and Language (cs.CL)","FOS: Computer and information sciences"],"html_path":"papers/GlobalDentBench.html","annotation_count":16,"reading_time_minutes":83,"read_by_day":[{"date":"2026-05-30","minutes":5},{"date":"2026-07-07","minutes":5},{"date":"2026-07-13","minutes":73}],"read_dates":[{"date":"2026-05-29","source":"dateAdded","count":0},{"date":"2026-05-30","source":"annotation","count":1},{"date":"2026-07-07","source":"annotation","count":1},{"date":"2026-07-13","source":"annotation","count":14}],"collections":["Benchmark"],"collection_paths":["Benchmark"]}];
+  var TREE     = [{"key":"Benchmark","name":"Benchmark","parent":null,"children":[],"papers":PAPERS,"count":1,"depth":0,"path":["Benchmark"]}];     // nested collection tree (roots[])
+  var CALENDAR = [{"date":"2026-05-30","minutes":5,"papers":["GlobalDentBench: A Multinational Benchmark for Evaluating LLM Clinical Reasoning in Dentistry with Expert Calibration"]},{"date":"2026-07-07","minutes":5,"papers":["GlobalDentBench: A Multinational Benchmark for Evaluating LLM Clinical Reasoning in Dentistry with Expert Calibration"]},{"date":"2026-07-13","minutes":73,"papers":["GlobalDentBench: A Multinational Benchmark for Evaluating LLM Clinical Reasoning in Dentistry with Expert Calibration"]}];   // [{date, minutes, papers:[]}] daily, full range
+  var STATS    = {"total": 7, "reading": 7, "done": 0, "total_annotations": 80, "total_reading_minutes": 461};
+
+  function escapeHtml(s){ if(s==null) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function escapeAttr(s){ return escapeHtml(s); }
+  function fmtMins(m){ m=Math.round(m||0); if(m<=0) return '0m'; var h=Math.floor(m/60), r=m%60; return h>0? h+'h '+r+'m' : r+'m'; }
+
+  // ── stats row ──
+  var statsRow = document.getElementById('statsRow');
+  var statPairs = [
+    ['精读总数', STATS.total],
+    ['Reading', STATS.reading],
+    ['Done', STATS.done],
+    ['累计阅读时长', fmtMins(STATS.total_reading_minutes)],
+    ['总高亮', STATS.total_annotations]
+  ];
+  statsRow.innerHTML = statPairs.map(function(p){
+    return '<div><span class="hm-dot"></span>'+p[0]+' <span class="hm-val">'+p[1]+'</span></div>';
+  }).join('');
+
+  // latest link
+  if (PAPERS.length) document.getElementById('latestLink').href = PAPERS[0].html_path;
+  else document.getElementById('latestLink').style.display = 'none';
+
+  // ── heatmap data: map date -> {minutes, papers} ──
+  var dayMap = {};
+  CALENDAR.forEach(function(d){ dayMap[d.date] = d; });
+  var maxMins = 1;
+  CALENDAR.forEach(function(d){ if (d.minutes > maxMins) maxMins = d.minutes; });
+
+  function levelFor(minutes){
+    if (!minutes || minutes <= 0) return 0;
+    var ratio = minutes / maxMins;
+    if (ratio > 0.75) return 4;
+    if (ratio > 0.5) return 3;
+    if (ratio > 0.25) return 2;
+    return 1;
+  }
+
+  // ── render heatmap for a given day count ──
+  var heatmapEl = document.getElementById('heatmap');
+  var tooltip = document.getElementById('hmTooltip');
+  var today = new Date();
+  today.setHours(0,0,0,0);
+
+  function renderHeatmap(rangeDays){
+    heatmapEl.innerHTML = '';
+    var end = today;
+    var start;
+    if (rangeDays === 'all') {
+      // earliest day with data, or 365 back
+      var earliest = end;
+      CALENDAR.forEach(function(d){ var dd=new Date(d.date); if(dd<earliest) earliest=dd; });
+      start = earliest;
+      // align start to Sunday so columns are weeks
+      start = new Date(start); start.setDate(start.getDate() - start.getDay());
+    } else {
+      start = new Date(end); start.setDate(start.getDate() - (rangeDays - 1));
+      start = new Date(start); start.setDate(start.getDate() - start.getDay());
+    }
+
+    var cur = new Date(start);
+    var frag = document.createDocumentFragment();
+    while (cur <= end) {
+      var dStr = cur.toISOString().slice(0,10);
+      var entry = dayMap[dStr] || {date: dStr, minutes: 0, papers: []};
+      var lvl = levelFor(entry.minutes);
+      var cell = document.createElement('div');
+      cell.className = 'hm-cell' + (lvl ? ' lv-'+lvl : '');
+      cell.dataset.date = dStr;
+      cell.dataset.minutes = entry.minutes;
+      cell.dataset.papers = (entry.papers || []).join('||');
+      frag.appendChild(cell);
+      cur.setDate(cur.getDate() + 1);
+    }
+    heatmapEl.appendChild(frag);
+  }
+
+  heatmapEl.addEventListener('mouseover', function(e){
+    var cell = e.target.closest('.hm-cell');
+    if (!cell) return;
+    var date = cell.dataset.date;
+    var mins = parseInt(cell.dataset.minutes||'0',10);
+    var papers = (cell.dataset.papers || '').split('||').filter(Boolean);
+    var papersHtml = papers.slice(0,4).map(function(t){return '<div class="ht-papers">'+escapeHtml(t)+'</div>';}).join('');
+    if (papers.length > 4) papersHtml += '<div class="ht-papers" style="color:var(--ink-faint);">+'+(papers.length-4)+' more</div>';
+    tooltip.innerHTML = '<span class="ht-date">'+date+'</span>'+
+      '<span class="ht-mins">'+fmtMins(mins)+' reading</span>' +
+      (papersHtml || '<div class="ht-papers" style="color:var(--ink-faint);">no papers</div>');
+    tooltip.style.opacity = 1;
+  });
+  heatmapEl.addEventListener('mousemove', function(e){
+    tooltip.style.left = (e.clientX + 14) + 'px';
+    tooltip.style.top = (e.clientY - 10) + 'px';
+  });
+  heatmapEl.addEventListener('mouseout', function(){ tooltip.style.opacity = 0; });
+
+  // range switcher
+  document.getElementById('rangeSwitch').addEventListener('click', function(e){
+    var btn = e.target.closest('.range-btn');
+    if (!btn) return;
+    document.querySelectorAll('.range-btn').forEach(function(b){ b.classList.remove('is-active'); });
+    btn.classList.add('is-active');
+    var r = btn.dataset.range;
+    renderHeatmap(r === 'all' ? 'all' : parseInt(r,10));
+  });
+  renderHeatmap(365);
+
+  // ── timeline ──
+  var tlList = document.getElementById('timelineList');
+  var tlItems = [];
+  PAPERS.forEach(function(p){
+    (p.read_by_day || []).forEach(function(rd){
+      tlItems.push({date: rd.date, title: p.title, minutes: rd.minutes});
+    });
+  });
+  tlItems.sort(function(a,b){ return b.date.localeCompare(a.date); });
+  if (!tlItems.length) {
+    tlList.innerHTML = '<li style="padding-left:0;color:var(--ink-faint);font-style:italic;">暂无阅读记录。</li>';
+  } else {
+    tlList.innerHTML = tlItems.slice(0, 20).map(function(it){
+      return '<li><span class="tl-date">'+it.date+'</span>'+escapeHtml(it.title)+
+        '<span class="tl-mins">'+fmtMins(it.minutes)+'</span></li>';
+    }).join('');
+  }
+
+  // ── collection groups (nested tree + card/table view + search/sort + tags) ──
+  var groupsC = document.getElementById('groupsContainer');
+  var viewState = { view: 'card', open: {} };
+
+  // ── read-only tags (shared by card + table) ──
+  function makeTagsReadOnly(p){
+    var box = document.createElement('div'); box.className = 'pc-tags';
+    (p.tags||[]).forEach(function(t){
+      var s = document.createElement('span'); s.className = 'pc-tag'; s.textContent = t;
+      box.appendChild(s);
+    });
+    return box;
+  }
+
+  // Annotate each node with the set of paper keys in its subtree (for filtering).
+  function annotate(node){
+    var keys = node.papers.map(function(p){ return p.key; });
+    node.children.forEach(function(ch){ annotate(ch); keys = keys.concat(ch._paperKeys); });
+    node._paperKeys = keys;
+    viewState.open[node.key] = true;   // expand everything by default
+  }
+  (TREE || []).forEach(annotate);
+
+  function buildCard(p){
+    var a = document.createElement('a');
+    a.className = 'paper-card paper-item';
+    a.href = p.html_path;
+    a.dataset.key = p.key;
+    var dot = document.createElement('span'); dot.className = 'pc-status-dot ' + p.status;
+    var title = document.createElement('div'); title.className = 'pc-title'; title.textContent = p.title;
+    var meta = document.createElement('div'); meta.className = 'pc-meta';
+    meta.textContent = p.authors + ' · ' + p.year + (p.venue ? ' · ' + p.venue : '');
+    var stats = document.createElement('div'); stats.className = 'pc-stats';
+    stats.innerHTML = '<span><span class="ps-num">'+p.annotation_count+'</span> highlights</span>'+
+                      '<span><span class="ps-num">'+fmtMins(p.reading_time_minutes)+'</span> read</span>';
+    a.appendChild(dot); a.appendChild(title); a.appendChild(meta); a.appendChild(stats);
+    a.appendChild(makeTagsReadOnly(p));
+    return a;
+  }
+
+  function buildTable(papers){
+    var tbl = document.createElement('table'); tbl.className = 'paper-table';
+    tbl.innerHTML = '<thead><tr><th>标题</th><th>作者</th><th>年份</th><th>出版物</th><th>状态</th><th>高亮</th><th>阅读</th></tr></thead>';
+    var tb = document.createElement('tbody');
+    papers.forEach(function(p){
+      var tr = document.createElement('tr'); tr.className = 'paper-item';
+      tr.dataset.key = p.key;
+      var stLabel = p.status === 'reading' ? 'Reading' : (p.status === 'done' ? 'Done' : 'Archived');
+      tr.innerHTML =
+        '<td><a class="pt-title" href="'+escapeAttr(p.html_path)+'">'+escapeHtml(p.title)+'</a></td>'+
+        '<td class="pt-meta pt-authors">'+escapeHtml(p.authors)+'</td>'+
+        '<td class="pt-meta">'+escapeHtml(p.year)+'</td>'+
+        '<td class="pt-meta">'+escapeHtml(p.venue || '—')+'</td>'+
+        '<td><span class="status-badge '+p.status+'">'+stLabel+'</span></td>'+
+        '<td class="pt-meta">'+p.annotation_count+'</td>'+
+        '<td class="pt-meta">'+fmtMins(p.reading_time_minutes)+'</td>';
+      tb.appendChild(tr);
+    });
+    tbl.appendChild(tb);
+    return tbl;
+  }
+
+  function buildCollNode(node, view){
+    var el = document.createElement('div');
+    el.className = 'coll-node' + (viewState.open[node.key] ? ' coll-open' : '') + (node.is_unfiled ? ' unfiled' : '');
+    el.dataset.key = node.key;
+    el.dataset.paperKeys = node._paperKeys.join(',');
+
+    var header = document.createElement('div'); header.className = 'coll-header';
+    var arrow = document.createElement('span'); arrow.className = 'coll-arrow'; arrow.textContent = '▸';
+    var name = document.createElement('span'); name.className = 'coll-name'; name.textContent = node.name;
+    var cnt = document.createElement('span'); cnt.className = 'coll-count'; cnt.textContent = node._viewCount + (node._viewCount === 1 ? ' paper' : ' papers');
+    header.appendChild(arrow); header.appendChild(name); header.appendChild(cnt);
+    el.appendChild(header);
+    header.addEventListener('click', function(){
+      viewState.open[node.key] = !viewState.open[node.key];
+      el.classList.toggle('coll-open');
+    });
+
+    var children = document.createElement('div'); children.className = 'coll-children';
+    node.children.forEach(function(ch){ children.appendChild(buildCollNode(ch, view)); });
+    if (node._viewPapers.length){
+      var papersWrap = document.createElement('div'); papersWrap.className = 'coll-papers';
+      if (view === 'table'){
+        papersWrap.appendChild(buildTable(node._viewPapers));
+      } else {
+        var grid = document.createElement('div'); grid.className = 'paper-grid';
+        node._viewPapers.forEach(function(p){ grid.appendChild(buildCard(p)); });
+        papersWrap.appendChild(grid);
+      }
+      children.appendChild(papersWrap);
+    }
+    el.appendChild(children);
+    return el;
+  }
+
+  // search + sort
+  function lastDate(p){
+    var r = p.read_by_day;
+    if (r && r.length) return r[r.length-1].date;
+    if (p.read_dates && p.read_dates.length) return p.read_dates[p.read_dates.length-1].date;
+    return '';
+  }
+  function sortPapers(arr, mode){
+    var a = arr.slice();
+    if (mode === 'year') a.sort(function(x,y){ return String(y.year).localeCompare(String(x.year)); });
+    else if (mode === 'read') a.sort(function(x,y){ return (y.reading_time_minutes||0) - (x.reading_time_minutes||0); });
+    else a.sort(function(x,y){ return lastDate(y).localeCompare(lastDate(x)); });
+    return a;
+  }
+  function applyView(){
+    var q = (document.getElementById('searchInput').value||'').toLowerCase().trim();
+    var mode = document.getElementById('sortSelect').value;
+    function walk(n){
+      n._viewPapers = sortPapers(n.papers.filter(function(p){
+        if (!q) return true;
+        return (p.title + ' ' + p.authors).toLowerCase().indexOf(q) !== -1;
+      }), mode);
+      n.children.forEach(walk);
+      n._viewCount = n._viewPapers.length + n.children.reduce(function(s,c){ return s + c._viewCount; }, 0);
+    }
+    (TREE || []).forEach(walk);
+  }
+
+  function renderGroups(){
+    groupsC.innerHTML = '';
+    applyView();
+    if (!TREE || !TREE.length){
+      groupsC.innerHTML = '<div class="empty-state">尚未加入精读。在对话里说「把 &lt;论文名&gt; 加入精读」开始。</div>';
+      return;
+    }
+    var tree = document.createElement('div'); tree.className = 'coll-tree';
+    TREE.forEach(function(root){ tree.appendChild(buildCollNode(root, viewState.view)); });
+    groupsC.appendChild(tree);
+  }
+
+  // view toggle
+  document.getElementById('viewSwitch').addEventListener('click', function(e){
+    var btn = e.target.closest('.view-btn'); if (!btn) return;
+    document.querySelectorAll('.view-btn').forEach(function(b){ b.classList.remove('is-active'); });
+    btn.classList.add('is-active');
+    viewState.view = btn.dataset.view;
+    renderGroups();
+  });
+  document.getElementById('searchInput').addEventListener('input', renderGroups);
+  document.getElementById('sortSelect').addEventListener('change', renderGroups);
+
+  renderGroups();
+
+  // ── accent theme switcher ──
+  var accentDots = document.querySelectorAll('.accent-dot');
+  function setAccent(a, persist){
+    document.body.setAttribute('data-accent', a);
+    accentDots.forEach(function(d){ d.classList.toggle('is-active', d.dataset.accent === a); });
+    if (persist) { try { localStorage.setItem('litreader:dashboard:accent', a); } catch(e){} }
+  }
+  var savedAccent = 'blue';
+  try { var sa = localStorage.getItem('litreader:dashboard:accent'); if (sa) savedAccent = sa; } catch(e){}
+  setAccent(savedAccent, false);
+  accentDots.forEach(function(d){
+    d.addEventListener('click', function(){ setAccent(d.dataset.accent, true); });
+  });
+
+})();
+</script>
+
+</body>
+</html>
