@@ -77,8 +77,7 @@ def _resolve_figure_python():
     return sys.executable
 
 # Empty summary template — the LLM fills this in after `add` returns.
-# Schema is Heilmeier's catechism adapted for paper reading (see
-# references/summary_schema.md). Figures are NOT part of the summary — they
+# See references/summary_schema.md. Figures are NOT part of the summary — they
 # come from extract_figures.py writing papers/<KEY>_images/manifest.json.
 SUMMARY_TEMPLATE = {
     "schema_version": 3,
@@ -299,7 +298,7 @@ def _require_initialized():
 
 
 def _write_empty_summary(key):
-    """Write an empty Heilmeier summary template for the LLM to fill later."""
+    """Write an empty summary template for the LLM to fill later."""
     summary = json.loads(json.dumps(SUMMARY_TEMPLATE))
     summary["zotero_key"] = key
     (_common.PAPERS_DIR / (key + ".summary.json")).write_text(

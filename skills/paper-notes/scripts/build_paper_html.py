@@ -610,7 +610,7 @@ def build(key, summary_file=None):
         "__ABSTRACT__": _common.html_escape(meta.get("abstractNote", "")),
         "__STATUS__": _common.html_escape(status),
         "__KEYWORDS_ROW__": paper_keywords(meta),
-        # Heilmeier Q1-Q7 (long-form fields → multi-paragraph <p> blocks)
+        # Guided-summary fields (long-form fields → multi-paragraph <p> blocks)
         "__GUIDE_BACKGROUND__": render_prose(initial["guide_background"]),
         "__GUIDE_QUESTION__": render_prose(initial["guide_question"]),
         "__GUIDE_APPROACH__": render_prose(initial["guide_approach"]),

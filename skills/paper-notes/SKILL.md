@@ -6,7 +6,24 @@ agent_created: true
 
 # paper-notes
 
-Manage a personal close-reading workflow built on Zotero. Maintain a manually-curated reading list (a local manifest, not a Zotero collection), fetch PDF highlights + notes that the companion `zotero` skill cannot, render each closely-read paper as an **editable** HTML page with an LLM-structured summary, and aggregate everything into a reading dashboard with a historical reading calendar.
+Manage a personal close-reading workflow built on Zotero. Maintain a manually-curated reading list (a local manifest, not a Zotero collection), fetch PDF highlights + notes that the `zotero.py` CLI does not expose, render each closely-read paper as an **editable** HTML page with an LLM-structured summary, and aggregate everything into a reading dashboard with a historical reading calendar.
+
+## Permissions & Data Flow
+
+This skill reads and writes only the user's own literature data. It does not exfiltrate credentials, cookies, or personal data.
+
+- **External service — Zotero Web API** (`api.zotero.org`): GET-only access to the user's own Zotero library (metadata, PDF annotations, notes, collections) using the user's own `ZOTERO_API_KEY`. No POST/PUT/DELETE; no third-party endpoints.
+- **Local file reads**: reads PDFs and Zotero's full-text cache from the local Zotero storage directory (`~/Zotero/storage/...` by default, overridable via `ZOTERO_DATA_DIR`); reads `~/.zshrc`, `~/.bashrc`, `~/.zprofile`, `~/.bash_profile` only to recover `ZOTERO_*` environment variables when the shell did not export them.
+- **Local file writes**: all outputs go under `outputs/paper-notes/` in the working directory (manifest, HTML pages, JSON summaries, extracted figures/sections). No writes outside this directory.
+- **Browser capability**: the generated paper page offers a "Sync Folder" button using the File System Access API (`showDirectoryPicker`) to persist in-browser edits back to `papers/<KEY>.edits.json`. Granted only on an explicit user gesture; non-Chromium browsers fall back to manual Export/Import JSON.
+- **Runtime dependencies**: figure/section extraction uses PyMuPDF (`pip install pymupdf`) if available; generated pages load MathJax v3 from the jsDelivr CDN for LaTeX rendering. Both are optional — the skill degrades gracefully without them.
+- **No hidden behavior**: no `eval`/`exec`/`os.system`, no shell injection (`subprocess` is always called with list args, never `shell=True`), no account automation, no telemetry.
+
+## Source & Attribution
+
+- Original, self-authored skill (`agent_created: true`). All bundled code (Python scripts, HTML templates, CSS) is the author's own work.
+- No third-party source code is bundled. Self-hosted web fonts ship in `assets/fonts/` for offline rendering.
+- No content scraping, plagiarism, or reposting of others' skills.
 
 ## When to use
 
@@ -18,8 +35,8 @@ Manage a personal close-reading workflow built on Zotero. Maintain a manually-cu
 
 ## Prerequisites
 
-- `ZOTERO_API_KEY` and `ZOTERO_USER_ID` environment variables set (the same env the `zotero` skill uses). Create a key at https://www.zotero.org/settings/keys/new.
-- The companion `zotero` skill installed at the project path `.codex/skills/zotero/` (this skill shell-calls its `zotero.py`; it does NOT rewrite Zotero connection logic).
+- `ZOTERO_API_KEY` and `ZOTERO_USER_ID` environment variables set (standard Zotero Web API credentials). Create a key at https://www.zotero.org/settings/keys/new.
+- The `zotero.py` CLI script at `.codex/skills/zotero/scripts/zotero.py` (this skill shell-calls it for item search/get; it does not reimplement Zotero connection logic).
 
 If credentials are missing or the key is invalid (403 / "Key not found"), tell the user and link the key-creation page. See `references/troubleshooting.md`.
 
@@ -39,7 +56,7 @@ The three questions, and what each controls:
 1. **Preferred language** (`--language`) — the language the summary + UI copy should default to. zh = Chinese (default), en = English. The LLM summary procedure then defaults to that language instead of always Chinese.
 2. **Default page color / accent** (`--accent`) — rose / green / blue. Stored as `default_accent` and injected into **every** generated page's `<body data-accent>` + the topbar switcher's initial selection, so newly built pages show the chosen color on first open (before any per-page localStorage override).
 3. **Connect to Zotero?** (`--connect-zotero`) — the most consequential switch:
-   - **yes** (default): normal flow — fetch metadata/annotations via the `zotero` skill, derive the reading calendar, extract figures from the cloud/local PDF, and render the Zotero-only modules (paper page: "Zotero 高亮" + "Zotero 笔记"; dashboard: the reading-heatmap + "最近阅读" timeline).
+   - **yes** (default): normal flow — fetch metadata/annotations via the `zotero.py` CLI, derive the reading calendar, extract figures from the cloud/local PDF, and render the Zotero-only modules (paper page: "Zotero 高亮" + "Zotero 笔记"; dashboard: the reading-heatmap + "最近阅读" timeline).
    - **no**: the skill runs **Zotero-free**. The dashboard's heatmap/timeline are hidden (`body[data-zotero="off"]`), the paper page hides the two Zotero-only submodules, and papers are added by **manual upload** instead of Zotero fetch:
      ```
      python3 manage_reading_list.py add --manual \
@@ -66,9 +83,9 @@ All runtime artifacts land in the working directory under `outputs/paper-notes/`
 
 The skill package itself holds no runtime state — everything is reproducible from the manifest + Zotero.
 
-## Companion skills & the annotation gap
+## The `zotero.py` CLI & annotation fetching
 
-Read `.codex/skills/zotero/SKILL.md` first for the `zotero.py` CLI (search / get / collections / children). This skill's `scripts/fetch_annotations.py` fills a gap: `zotero.py` does NOT parse the Zotero 6+ `annotation` itemType (PDF highlights). Annotations live two levels below the paper — paper → PDF attachment → annotations — so `fetch_annotations.py` walks that hierarchy. See `references/annotation_fields.md` for the field mapping and color strategy.
+The `zotero.py` CLI (at `.codex/skills/zotero/scripts/zotero.py`) exposes search / get / collections / children; this skill shell-calls it for item **search** and **get**. `scripts/fetch_annotations.py` fills a gap: `zotero.py` does NOT parse the Zotero 6+ `annotation` itemType (PDF highlights). Annotations live two levels below the paper — paper → PDF attachment → annotations — so `fetch_annotations.py` walks that hierarchy. See `references/annotation_fields.md` for the field mapping and color strategy.
 
 ## Commands
 
@@ -146,9 +163,7 @@ After the user adds new highlights in Zotero's PDF reader, they say "refresh pap
 
 ## Visual style
 
-Both templates (`assets/paper_template.html`, `assets/dashboard_template.html`) use the editorial reading layout from `llm-learn/skill/output/ch15.html`: warm accent on warm-ink text (`#423F3D`), white background, 1px hairline borders (no shadow cards), tiny uppercase letterspaced labels as section markers, single column (~720px), dot list markers. The accent is **themeable** via 3 swatches (rose / green / blue) using the same 4-level structure (`--accent-light` / `--accent-mid` / `--accent-deep` / `--accent-tint`, + `--accent-mid-rgb` for alpha). Rose default `#ED7E7D` mid; green `#6FBF92`; blue `#6BA6D4` — all share hue/lightness so they read as one material. Set `<body data-accent="rose|green|blue">`; the override blocks sit just before `</style>`. The paper page shows a 3-dot Theme switcher in the topbar (persisted per paper in `localStorage` as `litreader:<key>:accent`); the dashboard has the same switcher (persisted as `litreader:dashboard:accent`). The dashboard's heatmap `--hm-0..--hm-4` are redefined inside each theme block so the heatmap recolors with the theme. The per-paper page makes every summary field `contenteditable` with localStorage auto-save + a "Sync Folder" button (File System Access API) that auto-writes edits + status to `papers/<KEY>.edits.json`, plus Export/Import JSON as fallback. A top-bar `← 总览` link (and a footer `← Back to Dashboard` link) returns to `../dashboard.html`. The dashboard renders a **GitHub-style contribution heatmap** (daily reading-minutes, 5 intensity levels from `--hm-0` to `--hm-4`) with a time-range switcher (3M / 6M / 1Y / All). Do not restyle to a different palette, and if you add a new accent color keep the 4-level structure aligned.
-
-The summary itself follows the **Heilmeier catechism** (7 questions) — see `references/summary_schema.md`.
+Both templates (`assets/paper_template.html`, `assets/dashboard_template.html`) use an editorial reading layout: warm accent on warm-ink text (`#423F3D`), white background, 1px hairline borders (no shadow cards), tiny uppercase letterspaced labels as section markers, single column (~720px), dot list markers. The accent is **themeable** via 3 swatches (rose / green / blue) using the same 4-level structure (`--accent-light` / `--accent-mid` / `--accent-deep` / `--accent-tint`, + `--accent-mid-rgb` for alpha). Rose default `#ED7E7D` mid; green `#6FBF92`; blue `#6BA6D4` — all share hue/lightness so they read as one material. Set `<body data-accent="rose|green|blue">`; the override blocks sit just before `</style>`. The paper page shows a 3-dot Theme switcher in the topbar (persisted per paper in `localStorage` as `litreader:<key>:accent`); the dashboard has the same switcher (persisted as `litreader:dashboard:accent`). The dashboard's heatmap `--hm-0..--hm-4` are redefined inside each theme block so the heatmap recolors with the theme. The per-paper page makes every summary field `contenteditable` with localStorage auto-save + a "Sync Folder" button (File System Access API) that auto-writes edits + status to `papers/<KEY>.edits.json`, plus Export/Import JSON as fallback. A top-bar `← 总览` link (and a footer `← Back to Dashboard` link) returns to `../dashboard.html`. The dashboard renders a **GitHub-style contribution heatmap** (daily reading-minutes, 5 intensity levels from `--hm-0` to `--hm-4`) with a time-range switcher (3M / 6M / 1Y / All). Do not restyle to a different palette, and if you add a new accent color keep the 4-level structure aligned.
 
 ## Dashboard: collections & views
 
