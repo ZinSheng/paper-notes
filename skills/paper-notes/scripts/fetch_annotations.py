@@ -30,7 +30,7 @@ Zero dependencies — stdlib only. Reuses _common for config/HTTP/pagination.
 import argparse
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import _common
 
@@ -83,12 +83,14 @@ def _parse_iso_dt(iso_str):
 
 
 def derive_reading_time(annotations):
-    """Estimate reading time from annotation timestamps.
+    """Estimate reading time from inter-annotation gaps within sessions.
 
     NOTE: Zotero's Web API does NOT expose true reading duration. This is an
-    approximation: annotations are clustered into reading sessions (a gap > 10
-    min starts a new session); each session's span is taken as its duration,
-    plus a small per-annotation overhead, capped per session.
+    approximation:
+    - Consecutive annotations within 10 min of each other form a reading session.
+    - A session's duration is the time span between its first and last annotation.
+    - A single isolated annotation (no neighbour within 10 min) counts as 5 min.
+    - No per-annotation overhead — time comes from actual inter-annotation gaps.
 
     Returns {reading_time_minutes: int, reading_by_day: [{date, minutes}]}.
     """
@@ -97,40 +99,66 @@ def derive_reading_time(annotations):
         dt = _parse_iso_dt(ann.get("date_added"))
         if dt is None:
             continue
-        timed.append((dt, dt.strftime("%Y-%m-%d")))
+        timed.append(dt)
     if not timed:
         return {"reading_time_minutes": 0, "reading_by_day": []}
 
-    timed.sort(key=lambda x: x[0])
+    timed.sort()
 
     SESSION_GAP = 10 * 60      # 10 min gap -> new session
-    PER_ANNOT_OVERHEAD = 5     # minutes added per annotation (thinking time)
-    SESSION_CAP = 90           # max minutes attributed to one session
-    SESSION_FLOOR = 5          # min minutes for a session with annotations
+    ISOLATED_MINUTES = 5       # minutes for a single isolated annotation
 
     total_minutes = 0
     by_day = {}
 
-    session_start = timed[0][0]
-    session_last = timed[0][0]
-    session_day = timed[0][1]
+    session_start = timed[0]
+    session_last = timed[0]
     session_count = [1]
+
+    def record_duration(start, end, minutes):
+        """Add integer session minutes to each UTC day it spans."""
+        if start.date() == end.date() or end <= start:
+            day = start.strftime("%Y-%m-%d")
+            by_day[day] = by_day.get(day, 0) + minutes
+            return
+
+        total_seconds = (end - start).total_seconds()
+        segments = []
+        cursor = start
+        while cursor.date() < end.date():
+            next_day = (cursor + timedelta(days=1)).replace(
+                hour=0, minute=0, second=0, microsecond=0)
+            segments.append((cursor.strftime("%Y-%m-%d"),
+                             (next_day - cursor).total_seconds()))
+            cursor = next_day
+        segments.append((end.strftime("%Y-%m-%d"),
+                         (end - cursor).total_seconds()))
+
+        allocations = [int(round(minutes * seconds / total_seconds))
+                       for _, seconds in segments]
+        allocations[-1] += minutes - sum(allocations)
+        for (day, _), allocation in zip(segments, allocations):
+            by_day[day] = by_day.get(day, 0) + allocation
 
     def close_session():
         nonlocal total_minutes
-        span_min = (session_last - session_start).total_seconds() / 60.0
-        dur = span_min + PER_ANNOT_OVERHEAD * session_count[0]
-        dur = max(SESSION_FLOOR, min(dur, SESSION_CAP))
-        total_minutes += int(round(dur))
-        by_day[session_day] = by_day.get(session_day, 0) + int(round(dur))
+        if session_count[0] == 1:
+            # Single isolated annotation: fixed 5 min.
+            dur = ISOLATED_MINUTES
+        else:
+            # Multi-annotation session: time span between first and last.
+            span_min = (session_last - session_start).total_seconds() / 60.0
+            dur = max(1.0, span_min)
+        duration_minutes = int(round(dur))
+        total_minutes += duration_minutes
+        record_duration(session_start, session_last, duration_minutes)
 
-    for dt, day in timed[1:]:
+    for dt in timed[1:]:
         gap = (dt - session_last).total_seconds()
-        if gap > SESSION_GAP or day != session_day:
+        if gap > SESSION_GAP:
             close_session()
             session_start = dt
             session_last = dt
-            session_day = day
             session_count[0] = 1
         else:
             session_last = dt

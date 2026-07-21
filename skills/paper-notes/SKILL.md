@@ -151,7 +151,7 @@ The generated paper page is organized into three reader-facing blocks: `论文�
 
 ## Reading time (approximation — be honest)
 
-Zotero's Web API does NOT expose true reading duration. The `reading_time_minutes` / `reading_by_day` fields are **approximations** derived from annotation timestamps (sessions clustered by 60-min gaps, +5 min/annotation overhead, capped at 90 min/session). This captures **highlighting activity time**, not total time the PDF was open. A paper read but never highlighted in Zotero's reader shows 0 — expected. The dashboard heatmap and per-paper reading-time stats both use this approximation. State this honestly when reporting reading-time figures; do not present them as authoritative "Zotero reading time".
+Zotero's Web API does NOT expose true reading duration. The `reading_time_minutes` / `reading_by_day` fields are **approximations** derived from annotation timestamps: consecutive annotations within 10 min of each other form a reading session; a session's duration equals the time span between its first and last annotation; a single isolated annotation (no neighbour within 10 min) counts as 5 min. No per-annotation overhead — time comes from actual inter-annotation gaps. This captures **highlighting activity time**, not total time the PDF was open. A paper read but never highlighted in Zotero's reader shows 0 — expected. The dashboard heatmap and per-paper reading-time stats both use this approximation. State this honestly when reporting reading-time figures; do not present them as authoritative "Zotero reading time".
 
 ## Browser → file status sync
 

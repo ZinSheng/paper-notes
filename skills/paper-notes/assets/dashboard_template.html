@@ -343,6 +343,8 @@
   function escapeHtml(s){ if(s==null) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function escapeAttr(s){ return escapeHtml(s); }
   function fmtMins(m){ m=Math.round(m||0); if(m<=0) return '0m'; var h=Math.floor(m/60), r=m%60; return h>0? h+'h '+r+'m' : r+'m'; }
+  function fmtDate(d){ var y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0'); return y+'-'+m+'-'+day; }
+  function parseLocalDate(s){ var p=String(s).split('-'); return new Date(Number(p[0]), Number(p[1])-1, Number(p[2])); }
 
   // ── stats row ──
   var statsRow = document.getElementById('statsRow');
@@ -389,7 +391,7 @@
     if (rangeDays === 'all') {
       // earliest day with data, or 365 back
       var earliest = end;
-      CALENDAR.forEach(function(d){ var dd=new Date(d.date); if(dd<earliest) earliest=dd; });
+      CALENDAR.forEach(function(d){ var dd=parseLocalDate(d.date); if(dd<earliest) earliest=dd; });
       start = earliest;
       // align start to Sunday so columns are weeks
       start = new Date(start); start.setDate(start.getDate() - start.getDay());
@@ -401,7 +403,7 @@
     var cur = new Date(start);
     var frag = document.createDocumentFragment();
     while (cur <= end) {
-      var dStr = cur.toISOString().slice(0,10);
+      var dStr = fmtDate(cur);
       var entry = dayMap[dStr] || {date: dStr, minutes: 0, papers: []};
       var lvl = levelFor(entry.minutes);
       var cell = document.createElement('div');

@@ -141,9 +141,11 @@ at render time. If you want the manifest file updated too, run
 
 Zotero's **Web API does NOT expose per-paper reading duration**. The
 `reading_time_minutes` / `reading_by_day` fields are an **approximation**
-derived from annotation timestamps: annotations are clustered into sessions
-(a > 10 min gap starts a new session); each session contributes its time span
-+ 5 min/annotation overhead, capped at 90 min/session. This captures
+derived from annotation timestamps: consecutive annotations no more than
+10 min apart form a session, whose duration is the span from its first to
+last annotation. A session containing a single annotation counts as 5 min;
+there is no per-annotation overhead or per-session cap. Sessions that cross
+midnight have their minutes split between the affected UTC dates. This captures
 highlighting activity, not actual time the PDF was open.
 
 If a paper was read but never highlighted in Zotero's reader, its reading
