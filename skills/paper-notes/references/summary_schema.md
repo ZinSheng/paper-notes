@@ -2,6 +2,10 @@
 
 This document defines a faithful, evidence-aware reading note. It is a guide for reasoning, not a prose template to imitate. The output must begin with a coherent article guide before the detailed fields and section-by-section notes.
 
+## Research context
+
+Resolve the paper's saved research choice before writing `relevance_to_my_work`. With a selected project, add `research_context` containing `id`, `name`, `research_question`, and `project_updated_at`, plus a top-level `relevance_generated_at`. Tie relevance to concrete project fields. With no project, set `research_context` to `null` and discuss general significance without claiming a relationship to the user's work. Never infer a personal research direction from the reading list alone.
+
 ## 1. Choose the paper profile first
 
 Set `paper_type` to one or more applicable values:
@@ -145,9 +149,8 @@ Set `level` from the source number: a top-level numbered section such as `4` use
 
 ## 7. After generating
 
-Write the JSON to `papers/<KEY>.summary.json`, then run:
+Write the JSON to `papers/<KEY>.summary.json`, write and validate `papers/<KEY>.sections.json`, then run:
 
 ```bash
-python3 scripts/build_paper_html.py --key <KEY>
-python3 scripts/build_dashboard.py
+python3 scripts/manage_reading_list.py finalize-summary --key <KEY>
 ```

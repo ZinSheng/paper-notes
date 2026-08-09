@@ -678,6 +678,10 @@
           <button class="status-btn" data-status="archived" type="button">Archived</button>
         </div>
       </div>
+      <div class="head-status">
+        <span class="hs-label">Research</span>
+        <span class="hm-val">__RESEARCH_CONTEXT_LABEL__</span>
+      </div>
       __KEYWORDS_ROW__
     </header>
 
@@ -948,15 +952,19 @@
 
   function collectEdits(statusOverride){
     var edits = {};
+    var fieldTimes = clone(INITIAL._field_updated_at || {});
+    var nowStamp = new Date().toISOString();
     document.querySelectorAll('[data-field]').forEach(function(el){
       var f = el.dataset.field;
       if (f.indexOf('key_quotes.')===0) return;
+      var nextValue;
       if (isListField(f)) {
         var items=[]; el.querySelectorAll('li').forEach(function(li){ var t=li.innerText.trim(); if(t)items.push(t); });
-        setByPath(edits,f,items);
+        nextValue=items; setByPath(edits,f,items);
       } else if (isProseField(f)) {
-        setByPath(edits,f,readProse(el));
-      } else { setByPath(edits,f,el.innerText.trim()); }
+        nextValue=readProse(el); setByPath(edits,f,nextValue);
+      } else { nextValue=el.innerText.trim(); setByPath(edits,f,nextValue); }
+      if(JSON.stringify(getByPath(INITIAL,f))!==JSON.stringify(nextValue)) fieldTimes[f]=nowStamp;
     });
     var quotes=[];
     document.querySelectorAll('.quote-block').forEach(function(b){
@@ -966,11 +974,14 @@
       quotes.push({text:qt,note:qn,page:m?m.dataset.page:"",color:m?m.dataset.color:""});
     });
     if (quotes.length || (INITIAL.key_quotes&&INITIAL.key_quotes.length)) edits.key_quotes=quotes;
+    if(JSON.stringify(INITIAL.key_quotes||[])!==JSON.stringify(quotes)) fieldTimes.key_quotes=nowStamp;
     var secArr = collectSections();
     if (secArr.length || (INITIAL.sections&&INITIAL.sections.length)) edits.sections = secArr;
+    if(JSON.stringify(INITIAL.sections||[])!==JSON.stringify(secArr)) fieldTimes.sections=nowStamp;
     Object.keys(INITIAL).forEach(function(k){ if(!(k in edits)) edits[k]=INITIAL[k]; });
     edits.module_notes = collectModuleNotes();   // per-module marginalia
     edits.status = statusOverride || currentStatus;
+    edits._field_updated_at = fieldTimes;
     edits.exported_at = new Date().toISOString();
     edits.zotero_key = ZKEY;
     edits.schema_version = INITIAL.schema_version || 3;

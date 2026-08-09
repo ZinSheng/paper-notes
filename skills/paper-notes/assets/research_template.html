@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>__TITLE__</title>
+  <link rel="stylesheet" href="../fonts/fonts.css">
+  <style>
+    :root{--ink:#423f3d;--soft:#716b67;--faint:#968e88;--rule:#ded9d4;--tint:#f6f2ef;--accent:#6ba6d4;--font:Inter,"Noto Sans SC",sans-serif}
+    [data-accent="rose"]{--accent:#ed7e7d;--tint:#fff3f2}[data-accent="green"]{--accent:#6fbf92;--tint:#f1faf4}
+    *{box-sizing:border-box}body{margin:0;background:#fff;color:var(--ink);font:15px/1.75 var(--font)}
+    main{width:min(760px,calc(100% - 40px));margin:0 auto;padding:34px 0 72px}
+    nav{margin-bottom:48px;font-size:13px}a{color:var(--soft);text-decoration:none;border-bottom:1px solid var(--rule)}a:hover{color:var(--accent);border-color:var(--accent)}
+    header{border-bottom:1px solid var(--rule);padding-bottom:24px;margin-bottom:38px}h1{font-size:34px;line-height:1.2;margin:0 0 14px}h2{font-size:19px;margin:34px 0 10px}
+    .status{display:inline-block;padding:3px 9px;background:var(--tint);color:var(--soft);font-size:12px;letter-spacing:.05em;text-transform:uppercase}
+    .keywords{display:flex;flex-wrap:wrap;gap:7px}.keyword{border:1px solid var(--rule);padding:3px 9px;color:var(--soft);font-size:12px}
+    .empty{color:var(--faint)}
+  </style>
+</head>
+<body data-accent="__DEFAULT_ACCENT__">
+<main>
+  <nav><a href="../dashboard.html">← Dashboard</a></nav>
+  <header><h1>__TITLE__</h1><span class="status">__STATUS__</span></header>
+  <section><h2>研究问题</h2><div>__RESEARCH_QUESTION__</div></section>
+  <section><h2>背景与动机</h2><div>__BACKGROUND__</div></section>
+  <section><h2>方法或设计</h2><div>__METHOD__</div></section>
+  <section><h2>数据或材料</h2><div>__DATA__</div></section>
+  <section><h2>当前难点</h2><div>__CHALLENGES__</div></section>
+  <section><h2>关键词</h2><div class="keywords">__KEYWORDS__</div></section>
+</main>
+</body>
+</html>

@@ -1,8 +1,8 @@
 """Shared utilities for the paper-notes skill.
 
-Provides a minimal Zotero Web API v3 client (config, requests with retry,
-pagination) extracted from the zotero skill's zotero.py conventions, plus
-HTML placeholder replacement helpers. Zero external dependencies — stdlib only.
+Provides a minimal self-contained Zotero Web API v3 client (config, requests
+with retry, pagination), plus HTML placeholder replacement helpers. Zero
+external dependencies — stdlib only.
 
 This module is imported by fetch_annotations.py, manage_reading_list.py,
 build_paper_html.py and build_dashboard.py.
@@ -11,6 +11,7 @@ build_paper_html.py and build_dashboard.py.
 import json
 import os
 import re
+import shutil
 import sys
 import time
 import urllib.error
@@ -33,7 +34,15 @@ _OUTPUT_ROOT = os.environ.get("LITERATURE_READER_OUTPUT_DIR")
 OUTPUT_DIR = Path(_OUTPUT_ROOT) if _OUTPUT_ROOT else Path.cwd() / "outputs" / "paper-notes"
 PAPERS_DIR = OUTPUT_DIR / "papers"
 MANIFEST_PATH = OUTPUT_DIR / "reading-list.json"
-DASHBOARD_PATH = OUTPUT_DIR / "dashboard.html"
+RESEARCH_PATH = OUTPUT_DIR / "research-projects.json"
+HTML_DIR = OUTPUT_DIR / "html"
+HTML_PAPERS_DIR = HTML_DIR / "papers"
+HTML_RESEARCH_DIR = HTML_DIR / "research"
+DASHBOARD_PATH = HTML_DIR / "dashboard.html"
+OBSIDIAN_DIR = OUTPUT_DIR / "obsidian"
+OBSIDIAN_PAPERS_DIR = OBSIDIAN_DIR / "Papers"
+OBSIDIAN_RESEARCH_DIR = OBSIDIAN_DIR / "Research"
+OBSIDIAN_DASHBOARD_PATH = OBSIDIAN_DIR / "Dashboard.md"
 # Per-deployment settings (language, default accent, Zotero connection toggle).
 # Written by `manage_reading_list.py init`; read by the build scripts so that
 # every generated page honors the user's first-call choices.
@@ -53,17 +62,17 @@ DEFAULT_CONFIG = {
     "language": "zh",          # "zh" | "en"
     "default_accent": "blue",  # "rose" | "green" | "blue"
     "connect_zotero": True,    # False → no heatmap, manual PDF, hide Zotero sections
+    "output_mode": "html",    # "html" | "obsidian" | "both"
+    "use_research_context": False,  # Require an explicit project/none choice on add
 }
 
 # Self-hosted web fonts (woff2) shipped with the skill. Copied into the output
 # dir on every build so generated pages render offline / where Google Fonts is
-# blocked. Source = <skill>/assets/fonts; destination = <output>/fonts.
+# blocked. Source = <skill>/assets/fonts; destination = <output>/html/fonts.
 ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
+SKILL_DIR = ASSETS_DIR.parent
 FONTS_SRC = ASSETS_DIR / "fonts"
-FONTS_DST = OUTPUT_DIR / "fonts"
-
-# The companion zotero skill's executable.
-ZOTERO_PY = Path.cwd() / ".codex" / "skills" / "zotero" / "scripts" / "zotero.py"
+FONTS_DST = HTML_DIR / "fonts"
 
 
 # ─── Config ─────────────────────────────────────────────────────────────────
@@ -292,18 +301,17 @@ def fetch_collection_tree():
     """Fetch the full Zotero collection tree.
 
     Returns a flat list of {key, name, parent} where `parent` is the parent
-    collection key (or None for top-level). Used to reconstruct nested
-    collection hierarchies in the dashboard. Returns [] on any failure so
-    callers can fall back to per-paper stored collection data.
+    collection key (or None for top-level). Returns None when Zotero could not
+    be reached or configured; [] therefore means a successful empty library.
     """
     try:
         api_key, prefix = get_zotero_config()
     except SystemExit:
-        return []
+        return None
     try:
         data = paginate_all(prefix + "/collections", api_key)
     except Exception:
-        return []
+        return None
     out = []
     for c in (data or []):
         d = c.get("data", c)
@@ -316,6 +324,32 @@ def fetch_collection_tree():
             "parent": d.get("parentCollection"),
         })
     return out
+
+
+def load_collection_tree_cache():
+    path = OUTPUT_DIR / "collection-tree.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(data, dict) and isinstance(data.get("collections"), list):
+            return data["collections"]
+        # Backward compatibility: a non-empty legacy list was known-good. An
+        # empty legacy list is the corrupt/ambiguous format that caused the
+        # path migration bug and must not be trusted offline.
+        return data if isinstance(data, list) and data else None
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def save_collection_tree_cache(tree):
+    """Atomically persist a successfully fetched collection tree."""
+    if not isinstance(tree, list):
+        raise ValueError("collection tree cache must be a list")
+    ensure_output_dirs()
+    path = OUTPUT_DIR / "collection-tree.json"
+    tmp = path.with_suffix(".json.tmp")
+    payload = {"version": 1, "fetched_at": now_iso(), "collections": tree}
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(path)
 
 
 # ─── HTML placeholder replacement ────────────────────────────────────────────
@@ -343,8 +377,8 @@ def apply_placeholders(template, replacements, registry):
 # ─── Paths ──────────────────────────────────────────────────────────────────
 
 def zotero_py_path():
-    """Return the path to the companion zotero skill's executable."""
-    return ZOTERO_PY
+    """Return the bundled read-only Zotero CLI executable."""
+    return SKILL_DIR / "scripts" / "zotero.py"
 
 
 def local_pdf_path(attachment_key):
@@ -386,6 +420,77 @@ def ensure_output_dirs():
     """Create the output directory tree if it does not exist."""
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     PAPERS_DIR.mkdir(parents=True, exist_ok=True)
+    HTML_PAPERS_DIR.mkdir(parents=True, exist_ok=True)
+    HTML_RESEARCH_DIR.mkdir(parents=True, exist_ok=True)
+    migrate_legacy_html_outputs()
+
+
+def migrate_legacy_html_outputs():
+    """Move generated HTML artifacts from the legacy flat layout into html/."""
+    legacy_dashboard = OUTPUT_DIR / "dashboard.html"
+    if legacy_dashboard.is_file():
+        if DASHBOARD_PATH.exists():
+            legacy_dashboard.unlink()
+        else:
+            legacy_dashboard.replace(DASHBOARD_PATH)
+
+    legacy_research = OUTPUT_DIR / "research"
+    if legacy_research.is_dir() and legacy_research != HTML_RESEARCH_DIR:
+        for source in legacy_research.glob("*.html"):
+            target = HTML_RESEARCH_DIR / source.name
+            if target.exists():
+                source.unlink()
+            else:
+                source.replace(target)
+        try:
+            legacy_research.rmdir()
+        except OSError:
+            pass
+
+    for source in PAPERS_DIR.glob("*.html"):
+        target = HTML_PAPERS_DIR / source.name
+        if target.exists():
+            source.unlink()
+        else:
+            source.replace(target)
+
+    legacy_fonts = OUTPUT_DIR / "fonts"
+    if legacy_fonts.is_dir() and legacy_fonts != FONTS_DST:
+        FONTS_DST.mkdir(parents=True, exist_ok=True)
+        for source in legacy_fonts.iterdir():
+            if source.is_file():
+                target = FONTS_DST / source.name
+                if target.exists():
+                    source.unlink()
+                else:
+                    source.replace(target)
+        try:
+            legacy_fonts.rmdir()
+        except OSError:
+            pass
+
+
+def copy_html_figures(key):
+    """Copy canonical extracted figures into the self-contained HTML tree."""
+    validate_paper_key(key)
+    source = PAPERS_DIR / (key + "_images")
+    target = HTML_PAPERS_DIR / (key + "_images")
+    if source.is_dir():
+        shutil.copytree(source, target, dirs_exist_ok=True)
+    elif target.is_dir():
+        shutil.rmtree(target)
+
+
+def ensure_obsidian_dirs():
+    """Create the self-contained Obsidian vault directory tree."""
+    OBSIDIAN_PAPERS_DIR.mkdir(parents=True, exist_ok=True)
+    OBSIDIAN_RESEARCH_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def output_enabled(kind):
+    """Return whether ``html`` or ``obsidian`` output is enabled."""
+    mode = load_config().get("output_mode", "html")
+    return mode == kind or mode == "both"
 
 
 def copy_fonts():
@@ -398,7 +503,6 @@ def copy_fonts():
     """
     if not FONTS_SRC.is_dir():
         return
-    import shutil
     FONTS_DST.mkdir(parents=True, exist_ok=True)
     for item in FONTS_SRC.iterdir():
         if item.is_file():
@@ -429,20 +533,44 @@ def save_manifest(manifest):
     tmp.replace(MANIFEST_PATH)
 
 
+def load_research_projects():
+    """Load structured research projects, returning an empty skeleton."""
+    ensure_output_dirs()
+    if RESEARCH_PATH.exists():
+        try:
+            data = json.loads(RESEARCH_PATH.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and isinstance(data.get("projects"), list):
+                return data
+        except (json.JSONDecodeError, OSError):
+            pass
+    return {"version": 1, "updated_at": now_iso(), "projects": []}
+
+
+def save_research_projects(data):
+    """Atomically save structured research projects."""
+    ensure_output_dirs()
+    data["updated_at"] = now_iso()
+    tmp = RESEARCH_PATH.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(RESEARCH_PATH)
+
+
 # ─── Skill config (first-call preferences) ──────────────────────────────────
 
 def load_config():
     """Load litreader.config.json merged over DEFAULT_CONFIG.
 
-    Returns a dict with keys: initialized, language, default_accent,
-    connect_zotero. Missing or corrupt file → defaults (initialized=False).
+    Returns initialized preferences merged with safe defaults. Missing or
+    corrupt files use the defaults (initialized=False).
     """
     cfg = dict(DEFAULT_CONFIG)
+    needs_migration = False
     ensure_output_dirs()
     if CONFIG_PATH.exists():
         try:
             data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
             if isinstance(data, dict):
+                needs_migration = bool(data.get("initialized")) and "output_mode" not in data
                 cfg.update({k: v for k, v in data.items()
                             if k in DEFAULT_CONFIG})
         except (json.JSONDecodeError, OSError):
@@ -453,6 +581,11 @@ def load_config():
     if cfg["default_accent"] not in ("rose", "green", "blue"):
         cfg["default_accent"] = "blue"
     cfg["connect_zotero"] = bool(cfg["connect_zotero"])
+    cfg["use_research_context"] = bool(cfg["use_research_context"])
+    if cfg["output_mode"] not in ("html", "obsidian", "both"):
+        cfg["output_mode"] = "html"
+    if needs_migration:
+        save_config(cfg)
     return cfg
 
 

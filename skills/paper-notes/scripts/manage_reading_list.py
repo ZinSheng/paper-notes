@@ -24,8 +24,8 @@ Usage:
     python3 manage_reading_list.py remove --key VNPN6FHT
     python3 manage_reading_list.py archive --key VNPN6FHT
 
-Zero dependencies — stdlib only. Calls zotero.py, fetch_annotations.py and
-build_paper_html.py as subprocesses.
+Zero dependencies — stdlib only. Calls the bundled read-only zotero.py,
+fetch_annotations.py and build_paper_html.py as subprocesses.
 """
 
 import argparse
@@ -33,16 +33,21 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
+import uuid
 from pathlib import Path
 
 import _common
+import sync_edits
 
 HERE = Path(__file__).resolve().parent
 FETCH_ANN = HERE / "fetch_annotations.py"
 BUILD_HTML = HERE / "build_paper_html.py"
 BUILD_DASHBOARD = HERE / "build_dashboard.py"
+BUILD_MARKDOWN = HERE / "build_markdown.py"
+SYNC_EDITS = HERE / "sync_edits.py"
 EXTRACT_FIG = HERE / "extract_figures.py"
 EXTRACT_SECTIONS = HERE / "extract_sections.py"
 
@@ -80,7 +85,7 @@ def _resolve_figure_python():
 # See references/summary_schema.md. Figures are NOT part of the summary — they
 # come from extract_figures.py writing papers/<KEY>_images/manifest.json.
 SUMMARY_TEMPLATE = {
-    "schema_version": 3,
+    "schema_version": 4,
     "zotero_key": "",
     "generated_at": "",
     "model": "",
@@ -98,6 +103,8 @@ SUMMARY_TEMPLATE = {
     "reproduction_conditions": "",
     "interpretation": "",
     "relevance_to_my_work": "",
+    "research_context": None,
+    "relevance_generated_at": "",
     "evidence_map": [],
     "uncertainties": [],
     "key_quotes": [],
@@ -109,7 +116,7 @@ SUMMARY_TEMPLATE = {
 # ─── zotero.py wrapper ───────────────────────────────────────────────────────
 
 def _run_zotero(*args):
-    """Run the zotero skill's script with --json and return parsed JSON.
+    """Run the bundled read-only Zotero script and return parsed JSON.
 
     args are the subcommand + its args (e.g. ['get', 'VNPN6FHT']).
     """
@@ -260,6 +267,12 @@ def _build_collection_nodes():
     collections` output does not expose as JSON.
     """
     tree = _common.fetch_collection_tree()
+    if tree is None:
+        tree = _common.load_collection_tree_cache()
+        if tree is None:
+            raise RuntimeError("Zotero collection tree unavailable and no valid cache exists")
+    else:
+        _common.save_collection_tree_cache(tree)
     m = {}
     for c in tree:
         m[c["key"]] = {"name": c["name"], "parent": c.get("parent")}
@@ -280,9 +293,10 @@ def _require_initialized():
     if cfg.get("initialized"):
         return
     sys.stderr.write(
-        "paper-notes is not initialized. Ask the user the 3 first-run "
+        "paper-notes is not initialized. Ask the user the 5 first-run "
         "questions, then run: manage_reading_list.py init --language zh|en "
-        "--accent rose|green|blue --connect-zotero yes|no\n"
+        "--accent rose|green|blue --connect-zotero yes|no "
+        "--output html|obsidian|both --research-context yes|no\n"
     )
     print(json.dumps({
         "ok": False,
@@ -290,7 +304,8 @@ def _require_initialized():
         "next_step": "run_init",
         "message": "First-run setup required. Ask the user for preferred "
                    "language, default accent color (rose/green/blue), and "
-                   "whether to connect Zotero (yes/no), then run "
+                   "whether to connect Zotero (yes/no), output mode "
+                   "(html/obsidian/both), and whether to use research context, then run "
                    "`manage_reading_list.py init` with those answers before "
                    "adding papers.",
     }, ensure_ascii=False, indent=2))
@@ -303,6 +318,7 @@ def _write_empty_summary(key):
     summary["zotero_key"] = key
     (_common.PAPERS_DIR / (key + ".summary.json")).write_text(
         json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    sync_edits.initialize_state(key, generation_state="template", force_stamp=True)
 
 
 def _cache_annotations(key, ann_data):
@@ -312,11 +328,91 @@ def _cache_annotations(key, ann_data):
         json.dumps(ann_data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _rebuild_outputs(key=None, sync_first=True):
+    """Explicitly sync, migrate paths, then invoke pure renderers."""
+    if sync_first:
+        sync_args = ["--key", key] if key else []
+        _run_script(SYNC_EDITS, *sync_args)
+    cfg = _common.load_config()
+    if cfg.get("output_mode", "html") in ("html", "both"):
+        if key:
+            _run_script(BUILD_HTML, "--key", key)
+        _run_script(BUILD_DASHBOARD)
+    if cfg.get("output_mode") in ("obsidian", "both"):
+        md_args = ["--key", key] if key else []
+        if cfg.get("connect_zotero"):
+            md_args.insert(0, "--prepare-paths")
+        _run_script(BUILD_MARKDOWN, *md_args)
+
+
+def _rebuild_dashboards():
+    """Render dashboards only; paper pages do not exist until finalize."""
+    cfg = _common.load_config()
+    if cfg.get("output_mode", "html") in ("html", "both"):
+        _run_script(BUILD_DASHBOARD)
+    if cfg.get("output_mode") in ("obsidian", "both"):
+        _run_script(BUILD_MARKDOWN, "--dashboard-only")
+
+
+def _research_context(value):
+    """Validate a selected research project; ``none`` means general analysis."""
+    if value in (None, "none"):
+        return None
+    project = next((p for p in _common.load_research_projects().get("projects", [])
+                    if p.get("id") == value), None)
+    if not project:
+        raise ValueError("unknown research project: %s" % value)
+    if project.get("status") == "completed":
+        raise ValueError("completed research project cannot be selected: %s" % value)
+    return project
+
+
+def _apply_research_context(paper, value):
+    project = _research_context(value)
+    paper["research_context_id"] = project.get("id") if project else None
+    paper["research_context_selected"] = value is not None
+    paper["research_context_version"] = project.get("updated_at") if project else None
+    paper["relevance_generated_at"] = None
+
+
+def _research_selection_ready(value):
+    """Gate add before any files are written when research context is enabled."""
+    cfg = _common.load_config()
+    enabled = cfg.get("use_research_context", False)
+    if not enabled:
+        if value not in (None, "none"):
+            print(json.dumps({
+                "ok": False, "error": "research_context_disabled",
+                "next_step": "enable_research_context",
+                "message": "Research context is disabled. Enable it in settings before selecting a project.",
+            }, ensure_ascii=False, indent=2))
+            return False
+        return True
+    if value is not None:
+        _research_context(value)  # validate before add performs any writes
+        return True
+    projects = [p for p in _common.load_research_projects().get("projects", [])
+                if p.get("status") in ("active", "paused")]
+    print(json.dumps({
+        "ok": False,
+        "error": "research_selection_required",
+        "next_step": "repeat_add_with_research",
+        "research_projects": [{
+            "id": p.get("id"), "name": p.get("name"), "status": p.get("status"),
+            "research_question": p.get("research_question", ""),
+        } for p in projects],
+        "allow_none": True,
+        "message": "Ask the user to choose one listed research project or no project, then repeat add with --research <ID>|none.",
+    }, ensure_ascii=False, indent=2))
+    return False
+
+
 def _finalize_add(manifest, key, paper, status):
-    """Common tail for both add paths: render HTML, append, save, print status."""
-    _run_script(BUILD_HTML, "--key", key)
+    """Common tail for both add paths: save, render configured outputs, report."""
     manifest["papers"].append(paper)
     _common.save_manifest(manifest)
+    _rebuild_dashboards()
+    status["research_context_id"] = paper.get("research_context_id")
     print(json.dumps(status, ensure_ascii=False, indent=2))
 
 
@@ -327,14 +423,16 @@ def cmd_add(args):
     manifest = _common.load_manifest()
     existing = {p["zotero_key"] for p in manifest["papers"]}
 
-    # ── Manual add (no Zotero): user supplies a local PDF + metadata. ──
-    if args.manual:
-        return _cmd_add_manual(args, manifest, existing)
-
     if args.search:
         candidates = _run_zotero("search", args.search)
         _print_candidates(candidates)
         return
+    if not _research_selection_ready(args.research):
+        return
+
+    # ── Manual add (no Zotero): user supplies a local PDF + metadata. ──
+    if args.manual:
+        return _cmd_add_manual(args, manifest, existing)
     if args.doi:
         candidates = _run_zotero("search", args.doi)
         # filter by DOI match
@@ -370,6 +468,16 @@ def cmd_add(args):
     col_keys = item.get("collections", []) or []
     col_keys = [c for c in col_keys if isinstance(c, str)]
     collections = _resolve_collections(col_keys, col_map)
+    if len(col_keys) > 1 and not args.collection:
+        print(json.dumps({"ok": False, "error": "collection_selection_required",
+                          "key": key, "collections": collections,
+                          "next_step": "repeat add with --collection <KEY>"},
+                         ensure_ascii=False, indent=2))
+        return
+    if args.collection and args.collection not in col_keys:
+        sys.stderr.write("Selected collection is not assigned to this paper: %s\n" % args.collection)
+        sys.exit(2)
+    selected_collection_key = args.collection or (col_keys[0] if len(col_keys) == 1 else None)
 
     tags = [t.get("tag", "") for t in item.get("tags", [])
             if isinstance(t, dict)]
@@ -422,6 +530,7 @@ def cmd_add(args):
         "summary_path": "papers/%s.summary.json" % key,
         "metadata": metadata,
         "collections": collections,
+        "selected_collection_key": selected_collection_key,
         "tags": tags,
         "pdf_attachment_key": ann_data.get("pdf_attachment_key"),
         "annotation_count": ann_data.get("annotation_count", 0),
@@ -434,6 +543,7 @@ def cmd_add(args):
         "user_edits_version": 0,
         "notes": "",
     }
+    _apply_research_context(paper, args.research)
 
     # Render, append, save, and signal next step (shared tail).
     _finalize_add(manifest, key, paper, {
@@ -445,7 +555,8 @@ def cmd_add(args):
         "annotation_count": paper["annotation_count"],
         "has_pdf": paper["has_pdf"],
         "message": "Paper added with empty summary. Generate structured summary "
-                   "per references/summary_schema.md, then re-run build_paper_html.",
+                   "and sections per references/summary_schema.md, then run "
+                   "finalize-summary --key %s." % key,
     })
 
 
@@ -534,6 +645,7 @@ def _cmd_add_manual(args, manifest, existing):
         "user_edits_version": 0,
         "notes": "",
     }
+    _apply_research_context(paper, args.research)
 
     # Render, append, save, and signal next step (shared tail).
     _finalize_add(manifest, key, paper, {
@@ -546,8 +658,8 @@ def _cmd_add_manual(args, manifest, existing):
         "has_pdf": True,
         "manual": True,
         "message": "Manually-added paper (no Zotero). Generate structured "
-                   "summary per references/summary_schema.md, then re-run "
-                   "build_paper_html.",
+                   "summary and sections per references/summary_schema.md, "
+                   "then run finalize-summary --key %s." % key,
     })
 
 
@@ -558,15 +670,23 @@ def cmd_init(args):
         "language": args.language,
         "default_accent": args.accent,
         "connect_zotero": (args.connect_zotero == "yes"),
+        "output_mode": args.output,
+        "use_research_context": (args.research_context == "yes"),
     }
     _common.save_config(cfg)
     # Rebuild dashboard + all papers so the new accent / Zotero settings take
     # effect immediately. Config is read at build time, not render time, so an
     # init after papers were added would otherwise leave stale values in HTML.
-    _run_script(BUILD_DASHBOARD)
-    manifest = _common.load_manifest()
-    for p in manifest.get("papers", []):
-        _run_script(BUILD_HTML, "--key", p["zotero_key"])
+    _rebuild_outputs()
+    print(json.dumps({"ok": True, "config": _common.load_config()},
+                     ensure_ascii=False, indent=2))
+
+
+def cmd_settings(args):
+    """Update workflow preferences after initialization."""
+    cfg = _common.load_config()
+    cfg["use_research_context"] = (args.research_context == "yes")
+    _common.save_config(cfg)
     print(json.dumps({"ok": True, "config": _common.load_config()},
                      ensure_ascii=False, indent=2))
 
@@ -636,20 +756,38 @@ def cmd_remove(args):
             removed = True
             # delete generated files
             for suffix in (".html", ".summary.json", ".annotations.json",
-                           ".sections.json", ".section_text.json"):
+                           ".sections.json", ".section_text.json", ".field-state.json"):
                 f = _common.PAPERS_DIR / (args.key + suffix)
                 if f.exists():
                     f.unlink()
+            html_file = _common.HTML_PAPERS_DIR / (args.key + ".html")
+            if html_file.exists():
+                html_file.unlink()
             image_dir = _common.PAPERS_DIR / (args.key + "_images")
             if image_dir.is_dir():
-                for child in image_dir.iterdir():
-                    if child.is_file() or child.is_symlink():
-                        child.unlink()
-                image_dir.rmdir()
+                shutil.rmtree(image_dir)
+            html_image_dir = _common.HTML_PAPERS_DIR / (args.key + "_images")
+            if html_image_dir.is_dir():
+                shutil.rmtree(html_image_dir)
             if not args.keep_edits:
                 ef = _common.PAPERS_DIR / (args.key + ".edits.json")
                 if ef.exists():
                     ef.unlink()
+            note_rel = p.get("obsidian_path") or ("Papers/%s.md" % args.key)
+            md = _common.OBSIDIAN_DIR / note_rel
+            if md.is_file():
+                md.unlink()
+            legacy_md = _common.OBSIDIAN_PAPERS_DIR / (args.key + ".md")
+            if legacy_md.is_file() and legacy_md != md:
+                legacy_md.unlink()
+            note_path = Path(note_rel)
+            note_parts = list(note_path.parts)
+            if note_parts and note_parts[0] == "Papers":
+                note_parts = note_parts[1:]
+            attachment_dir = (_common.OBSIDIAN_DIR / "Attachments" /
+                              Path(*note_parts)).with_suffix("")
+            if attachment_dir.is_dir():
+                shutil.rmtree(attachment_dir)
         else:
             new_papers.append(p)
     if not removed:
@@ -657,6 +795,7 @@ def cmd_remove(args):
         sys.exit(1)
     manifest["papers"] = new_papers
     _common.save_manifest(manifest)
+    _rebuild_outputs()
     print(json.dumps({"ok": True, "key": args.key, "removed": True}))
 
 
@@ -678,6 +817,7 @@ def _set_status(args, status):
         sys.stderr.write("Paper %s not in manifest.\n" % args.key)
         sys.exit(1)
     _common.save_manifest(manifest)
+    _rebuild_outputs(args.key)
     print(json.dumps({"ok": True, "key": args.key, "status": status}))
 
 
@@ -732,18 +872,39 @@ def cmd_refresh(args):
         sys.stderr.write("Provide --key or --all.\n")
         sys.exit(1)
 
+    if args.regenerate_summary:
+        for key in keys:
+            _run_script(SYNC_EDITS, "--key", key)
+
+    if args.regenerate_summary and args.research is None:
+        projects = {p.get("id"): p for p in _common.load_research_projects().get("projects", [])}
+        for key in keys:
+            paper = next((p for p in manifest["papers"] if p["zotero_key"] == key), None)
+            if not paper or not paper.get("research_context_selected"):
+                sys.stderr.write("Choose --research <ID>|none before regenerating %s.\n" % key)
+                sys.exit(3)
+            pid = paper.get("research_context_id")
+            if pid and (pid not in projects or projects[pid].get("status") == "completed"):
+                sys.stderr.write("Saved research project for %s is missing/completed; choose --research <ID>|none.\n" % key)
+                sys.exit(3)
+
     col_map = _build_collection_nodes()
     import time as _t
     for i, key in enumerate(keys):
         if i > 0:
             _t.sleep(0.5)
-        _refresh_one(manifest, key, col_map, args.regenerate_summary)
+        _refresh_one(manifest, key, col_map, args.regenerate_summary, args.research)
     _common.save_manifest(manifest)
+    if args.regenerate_summary:
+        _rebuild_dashboards()
+    else:
+        for key in keys:
+            _rebuild_outputs(key)
     print(json.dumps({"ok": True, "refreshed": keys,
                       "regenerate_summary": bool(args.regenerate_summary)}))
 
 
-def _refresh_one(manifest, key, col_map, regenerate_summary):
+def _refresh_one(manifest, key, col_map, regenerate_summary, research=None):
     paper = next((p for p in manifest["papers"] if p["zotero_key"] == key), None)
     if not paper:
         sys.stderr.write("Paper %s not in manifest.\n" % key)
@@ -791,13 +952,107 @@ def _refresh_one(manifest, key, col_map, regenerate_summary):
         _extract_figures(key, ann_data["pdf_attachment_key"])
 
     if regenerate_summary:
+        if research is not None:
+            _apply_research_context(paper, research)
         _write_empty_summary(key)
-        # NOTE: edits.json is NOT removed — user edits persist. Only the
-        # summary is blanked for LLM regeneration. The LLM should generate a
-        # fresh summary; if edits.json exists it will still override at render.
+        # Existing view edits were synced before entering template state. No
+        # formal paper page is rendered again until finalize-summary.
 
-    _run_script(BUILD_HTML, "--key", key)
     paper["last_synced"] = _common.now_iso()
+
+
+def _slug(value):
+    slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")[:40]
+    return slug or "research"
+
+
+def _find_project(data, project_id):
+    return next((p for p in data.get("projects", []) if p.get("id") == project_id), None)
+
+
+def cmd_research(args):
+    """Manage structured research projects from the conversational CLI."""
+    data = _common.load_research_projects()
+    if args.research_command == "list":
+        projects = data.get("projects", [])
+        if args.status:
+            projects = [p for p in projects if p.get("status") == args.status]
+        print(json.dumps({"projects": projects}, ensure_ascii=False, indent=2))
+        return
+    if args.research_command == "add":
+        now = _common.now_iso()
+        base = _slug(args.name)
+        pid = base
+        known = {p.get("id") for p in data.get("projects", [])}
+        if pid in known:
+            pid = "%s-%s" % (base, uuid.uuid4().hex[:6])
+        fields = {
+            "name": args.name, "status": args.status or "active",
+            "research_question": args.research_question or "",
+            "background": args.background or "",
+            "method_or_design": args.method_or_design or "",
+            "data_or_materials": args.data_or_materials or "",
+            "current_challenges": args.current_challenges or "",
+            "keywords": args.keywords or [],
+        }
+        project = {"id": pid, "created_at": now, "updated_at": now,
+                   "field_updated_at": {k: now for k in fields}, **fields}
+        data.setdefault("projects", []).append(project)
+        _common.save_research_projects(data)
+        _rebuild_outputs()
+        print(json.dumps({"ok": True, "project": project}, ensure_ascii=False, indent=2))
+        return
+    project = _find_project(data, args.id)
+    if not project:
+        sys.stderr.write("Research project not found: %s\n" % args.id)
+        sys.exit(1)
+    now = _common.now_iso()
+    if args.research_command == "archive":
+        updates = {"status": "completed"}
+    else:
+        updates = {k: v for k, v in {
+            "name": args.name, "status": args.status,
+            "research_question": args.research_question, "background": args.background,
+            "method_or_design": args.method_or_design, "data_or_materials": args.data_or_materials,
+            "current_challenges": args.current_challenges, "keywords": args.keywords,
+        }.items() if v is not None}
+    stamps = project.setdefault("field_updated_at", {})
+    for field, value in updates.items():
+        project[field] = value
+        stamps[field] = now
+    project["updated_at"] = now
+    _common.save_research_projects(data)
+    _rebuild_outputs()
+    print(json.dumps({"ok": True, "project": project}, ensure_ascii=False, indent=2))
+
+
+def cmd_finalize_summary(args):
+    """Validate a completed summary, register its baseline, and first-render it."""
+    key = args.key
+    _common.validate_paper_key(key)
+    manifest = _common.load_manifest()
+    if not any(p.get("zotero_key") == key for p in manifest.get("papers", [])):
+        sys.stderr.write("Paper not found: %s\n" % key)
+        sys.exit(2)
+    path = _common.PAPERS_DIR / (key + ".summary.json")
+    summary = json.loads(path.read_text(encoding="utf-8"))
+    guide = summary.get("reading_guide")
+    required = ("background", "question", "approach", "main_findings", "insight", "limitations")
+    missing = [name for name in required if not isinstance(guide, dict) or not guide.get(name)]
+    sections_path = _common.PAPERS_DIR / (key + ".sections.json")
+    sections = json.loads(sections_path.read_text(encoding="utf-8")) if sections_path.exists() else {}
+    if missing or not sections.get("sections"):
+        sys.stderr.write("Summary is incomplete; missing guide fields: %s; sections required.\n" %
+                         (", ".join(missing) or "none"))
+        sys.exit(2)
+    now = _common.now_iso()
+    summary["generated_at"] = now
+    summary["relevance_generated_at"] = now
+    path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    sync_edits.initialize_state(key, generation_state="generated", force_stamp=True)
+    _rebuild_outputs(key, sync_first=False)
+    print(json.dumps({"ok": True, "key": key, "generation_state": "generated"},
+                     ensure_ascii=False, indent=2))
 
 
 def main():
@@ -810,6 +1065,10 @@ def main():
     p_add.add_argument("--doi", help="DOI (prints matching candidate, no add)")
     p_add.add_argument("--status", choices=["reading", "done"],
                        help="Initial status (default reading)")
+    p_add.add_argument("--research",
+                       help="Research project ID, or 'none' for general analysis")
+    p_add.add_argument("--collection",
+                       help="One Zotero collection key when the item belongs to several")
     p_add.add_argument("--manual", action="store_true",
                        help="Add from a local PDF without Zotero")
     p_add.add_argument("--pdf", help="Local PDF path (with --manual)")
@@ -827,7 +1086,16 @@ def main():
                         choices=["rose", "green", "blue"], required=True)
     p_init.add_argument("--connect-zotero", dest="connect_zotero",
                         choices=["yes", "no"], required=True)
+    p_init.add_argument("--output", choices=["html", "obsidian", "both"],
+                        required=True)
+    p_init.add_argument("--research-context", dest="research_context",
+                        choices=["yes", "no"], required=True)
     p_init.set_defaults(func=cmd_init)
+
+    p_settings = sub.add_parser("settings", help="Update workflow preferences")
+    p_settings.add_argument("--research-context", dest="research_context",
+                            choices=["yes", "no"], required=True)
+    p_settings.set_defaults(func=cmd_settings)
 
     p_rm = sub.add_parser("remove", help="Remove a paper + its files")
     p_rm.add_argument("--key", required=True)
@@ -852,6 +1120,8 @@ def main():
     p_ref.add_argument("--all", action="store_true")
     p_ref.add_argument("--regenerate-summary", action="store_true",
                        help="Blank the summary for LLM regeneration (keeps edits)")
+    p_ref.add_argument("--research",
+                       help="Change research project for regenerated relevance, or 'none'")
     p_ref.set_defaults(func=cmd_refresh)
 
     p_mark = sub.add_parser("mark", help="Set status")
@@ -859,6 +1129,39 @@ def main():
     p_mark.add_argument("--status", required=True,
                         choices=["reading", "done", "archived"])
     p_mark.set_defaults(func=cmd_mark)
+
+    p_fin = sub.add_parser("finalize-summary", help="Validate and render a completed summary")
+    p_fin.add_argument("--key", required=True)
+    p_fin.set_defaults(func=cmd_finalize_summary)
+
+    p_research = sub.add_parser("research", help="Manage research projects")
+    research_sub = p_research.add_subparsers(dest="research_command", required=True)
+    r_add = research_sub.add_parser("add", help="Add a research project")
+    r_add.add_argument("--name", required=True)
+    r_add.add_argument("--status", choices=["active", "paused"], default="active")
+    for flag in ("research-question", "background", "method-or-design",
+                 "data-or-materials", "current-challenges"):
+        r_add.add_argument("--" + flag)
+    r_add.add_argument("--keywords", nargs="*", default=[])
+    r_add.set_defaults(func=cmd_research)
+
+    r_update = research_sub.add_parser("update", help="Update a research project")
+    r_update.add_argument("--id", required=True)
+    r_update.add_argument("--name")
+    r_update.add_argument("--status", choices=["active", "paused", "completed"])
+    for flag in ("research-question", "background", "method-or-design",
+                 "data-or-materials", "current-challenges"):
+        r_update.add_argument("--" + flag)
+    r_update.add_argument("--keywords", nargs="*")
+    r_update.set_defaults(func=cmd_research)
+
+    r_list = research_sub.add_parser("list", help="List research projects")
+    r_list.add_argument("--status", choices=["active", "paused", "completed"])
+    r_list.set_defaults(func=cmd_research)
+
+    r_archive = research_sub.add_parser("archive", help="Complete a research project")
+    r_archive.add_argument("--id", required=True)
+    r_archive.set_defaults(func=cmd_research)
 
     args = ap.parse_args()
     args.func(args)

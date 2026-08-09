@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Fetch PDF annotations + notes for a Zotero paper.
 
-This fills a gap in the companion `zotero` skill, whose `children`/`get`
-commands do not parse the Zotero 6+ `annotation` itemType. Annotations live
-two levels below the paper: paper -> PDF attachment -> annotations.
+The bundled `zotero.py` handles search and metadata lookup only. This script
+reads the Zotero 6+ `annotation` itemType, which lives two levels below the
+paper: paper -> PDF attachment -> annotations.
 
 Usage:
     python3 fetch_annotations.py <PAPER_KEY>                 # JSON to stdout

@@ -121,7 +121,11 @@
 
   /* ── timeline ── */
   .timeline-box { margin-top: 24px; padding: 22px 26px; border: 1px solid var(--rule); background: var(--bg); }
-  .timeline-box .tb-label { font-size: 10.5px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--accent-deep); margin-bottom: 14px; display: block; }
+  .timeline-head { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:14px; }
+  .timeline-box .tb-label { font-size: 10.5px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--accent-deep); display: block; }
+  .timeline-toggle { border:1px solid var(--rule); background:var(--bg); color:var(--ink-soft); padding:5px 10px; cursor:pointer; font:12px var(--font-body); }
+  .timeline-toggle:hover { border-color:var(--accent-light); color:var(--accent-deep); background:var(--accent-tint); }
+  .timeline-toggle[hidden] { display:none; }
   .timeline-list { list-style: none; padding: 0; margin: 0; }
   .timeline-list li { position: relative; padding: 8px 0 8px 130px; font-size: 14px; line-height: 1.6; color: var(--ink); border-bottom: 1px solid var(--rule-lit); }
   .timeline-list li:last-child { border-bottom: none; }
@@ -216,6 +220,14 @@
   /* ── toast ── */
   .toast { position: fixed; left: 50%; bottom: 32px; transform: translateX(-50%) translateY(20px); background: var(--ink); color: var(--bg); font-size: 13px; padding: 10px 18px; border-radius: 4px; opacity: 0; pointer-events: none; transition: all .25s; z-index: 50; }
   .toast.is-visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .research-table { width:100%; table-layout:fixed; border-collapse:collapse; font-size:13.5px; margin-bottom:36px; }
+  .research-table th { text-align:left; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-faint); font-weight:600; padding:8px 10px; border-bottom:1px solid var(--rule); }
+  .research-table td { padding:10px; border-bottom:1px solid var(--rule-lit); vertical-align:top; }
+  .research-table tr:hover td { background:var(--accent-tint); }
+  .research-table th:nth-child(1), .research-table td:nth-child(1) { width:20%; }
+  .research-table th:nth-child(2), .research-table td:nth-child(2) { width:10%; }
+  .research-table th:nth-child(3), .research-table td:nth-child(3) { width:45%; }
+  .research-table th:nth-child(4), .research-table td:nth-child(4) { width:25%; }
 
   @media (max-width: 640px) {
     .head { padding: 32px 0 28px; margin-bottom: 32px; }
@@ -263,7 +275,7 @@
       <button class="accent-dot" data-accent="green" type="button" title="Green"></button>
       <button class="accent-dot" data-accent="blue" type="button" title="Blue"></button>
     </div>
-    <a class="tb-link" href="papers/__FIRST_KEY__" id="latestLink">Latest Paper →</a>
+    <a class="tb-link" href="__FIRST_PAPER_PATH__" id="latestLink">Latest Paper →</a>
   </div>
 </div>
 
@@ -276,6 +288,9 @@
   </header>
 
   <article class="body">
+
+    <h2><span class="h2-tag">研究方向</span>我的研究</h2>
+    <div id="researchWrap"></div>
 
     <div class="module-zotero">
     <h2><span class="h2-tag">阅读热力图</span>Reading Heatmap</h2>
@@ -300,7 +315,10 @@
       <div class="heatmap" id="heatmap"></div>
     </div>
     <div class="timeline-box">
-      <span class="tb-label">最近阅读 / Recent Reading</span>
+      <div class="timeline-head">
+        <span class="tb-label">最近阅读 / Recent Reading</span>
+        <button class="timeline-toggle" id="timelineToggle" type="button" aria-expanded="false">展开全部</button>
+      </div>
       <ol class="timeline-list" id="timelineList"></ol>
     </div>
     </div><!-- /module-zotero -->
@@ -339,12 +357,23 @@
   var TREE     = __GROUPS_JSON__;     // nested collection tree (roots[])
   var CALENDAR = __CALENDAR_JSON__;   // [{date, minutes, papers:[]}] daily, full range
   var STATS    = __STATS_JSON__;
+  var RESEARCH = __RESEARCH_JSON__;
 
   function escapeHtml(s){ if(s==null) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function escapeAttr(s){ return escapeHtml(s); }
   function fmtMins(m){ m=Math.round(m||0); if(m<=0) return '0m'; var h=Math.floor(m/60), r=m%60; return h>0? h+'h '+r+'m' : r+'m'; }
   function fmtDate(d){ var y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0'); return y+'-'+m+'-'+day; }
   function parseLocalDate(s){ var p=String(s).split('-'); return new Date(Number(p[0]), Number(p[1])-1, Number(p[2])); }
+
+  // ── read-only research projects ──
+  var researchWrap = document.getElementById('researchWrap');
+  function shortText(value,limit){ var s=String(value||'').replace(/\s+/g,' ').trim(); return s.length<=limit?s:s.slice(0,limit-1).trim()+'…'; }
+  function renderResearch(){
+    if(!RESEARCH.length){ researchWrap.innerHTML='<p>暂无研究方向。</p>'; return; }
+    var rows=RESEARCH.map(function(p){ var name='<a class="pt-title" href="'+escapeAttr(p.html_path)+'">'+escapeHtml(p.name||p.id)+'</a>'; return '<tr><td>'+name+'</td><td>'+escapeHtml(p.status||'active')+'</td><td>'+escapeHtml(shortText(p.research_question,88)||'—')+'</td><td>'+escapeHtml((p.keywords||[]).slice(0,5).join(' · ')||'—')+'</td></tr>'; }).join('');
+    researchWrap.innerHTML='<table class="research-table"><thead><tr><th>研究</th><th>状态</th><th>核心问题</th><th>关键词</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  }
+  renderResearch();
 
   // ── stats row ──
   var statsRow = document.getElementById('statsRow');
@@ -449,6 +478,8 @@
 
   // ── timeline ──
   var tlList = document.getElementById('timelineList');
+  var tlToggle = document.getElementById('timelineToggle');
+  var timelineExpanded = false;
   var tlItems = [];
   PAPERS.forEach(function(p){
     (p.read_by_day || []).forEach(function(rd){
@@ -456,14 +487,23 @@
     });
   });
   tlItems.sort(function(a,b){ return b.date.localeCompare(a.date); });
-  if (!tlItems.length) {
-    tlList.innerHTML = '<li style="padding-left:0;color:var(--ink-faint);font-style:italic;">暂无阅读记录。</li>';
-  } else {
-    tlList.innerHTML = tlItems.slice(0, 20).map(function(it){
+  function renderTimeline(){
+    if (!tlItems.length) {
+      tlList.innerHTML = '<li style="padding-left:0;color:var(--ink-faint);font-style:italic;">暂无阅读记录。</li>';
+      tlToggle.hidden = true;
+      return;
+    }
+    var visible = timelineExpanded ? tlItems : tlItems.slice(0,10);
+    tlList.innerHTML = visible.map(function(it){
       return '<li><span class="tl-date">'+it.date+'</span>'+escapeHtml(it.title)+
         '<span class="tl-mins">'+fmtMins(it.minutes)+'</span></li>';
     }).join('');
+    tlToggle.hidden = tlItems.length <= 10;
+    tlToggle.textContent = timelineExpanded ? '收起' : '展开全部';
+    tlToggle.setAttribute('aria-expanded', timelineExpanded ? 'true' : 'false');
   }
+  tlToggle.addEventListener('click',function(){ timelineExpanded=!timelineExpanded; renderTimeline(); });
+  renderTimeline();
 
   // ── collection groups (nested tree + card/table view + search/sort + tags) ──
   var groupsC = document.getElementById('groupsContainer');

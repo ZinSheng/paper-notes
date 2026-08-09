@@ -1,12 +1,11 @@
 ---
 name: paper-notes
-description: Manage a personal close-reading workflow — sync Zotero papers and PDF annotations, generate editable per-paper HTML summaries with LLM-structured content (every text element is contenteditable, localStorage auto-save, JSON export/import), and a reading dashboard grouped by Zotero collection with tag sub-filters plus a historical reading calendar. Use when the user wants to maintain a curated reading list, turn Zotero highlights into editable notes, review reading history, or refresh annotations after re-reading a paper.
-agent_created: true
+description: Manage a personal close-reading workflow with Zotero or local PDFs, editable HTML and/or Obsidian Markdown paper notes, reading dashboards, structured research-project management, research-aware relevance analysis, annotation refresh, and bidirectional edit sync. Use when the user wants to curate a reading list, turn papers or highlights into close-reading notes, manage research directions, review reading history, or maintain HTML/Obsidian literature notes.
 ---
 
 # paper-notes
 
-Manage a personal close-reading workflow built on Zotero. Maintain a manually-curated reading list (a local manifest, not a Zotero collection), fetch PDF highlights + notes that the `zotero.py` CLI does not expose, render each closely-read paper as an **editable** HTML page with an LLM-structured summary, and aggregate everything into a reading dashboard with a historical reading calendar.
+Manage a personal close-reading workflow built on Zotero or local PDFs. Maintain a curated manifest, fetch highlights and notes, render editable HTML, Obsidian Markdown, or both from canonical JSON, and aggregate papers with structured research-project context.
 
 ## Permissions & Data Flow
 
@@ -36,56 +35,64 @@ This skill reads and writes only the user's own literature data. It does not exf
 ## Prerequisites
 
 - `ZOTERO_API_KEY` and `ZOTERO_USER_ID` environment variables set (standard Zotero Web API credentials). Create a key at https://www.zotero.org/settings/keys/new.
-- The `zotero.py` CLI script at `.codex/skills/zotero/scripts/zotero.py` (this skill shell-calls it for item search/get; it does not reimplement Zotero connection logic).
+- No companion skill is required. This skill bundles a read-only `scripts/zotero.py` that supports the `search` and `get` operations used by the workflow.
 
 If credentials are missing or the key is invalid (403 / "Key not found"), tell the user and link the key-creation page. See `references/troubleshooting.md`.
 
 ## First-run initialization (IMPORTANT)
 
-On the **first** invocation of this skill in a project (detect by: `outputs/paper-notes/litreader.config.json` does **not** exist, or `load_config()["initialized"]` is false), ask the user three setup questions **before** doing any work, then persist the answers with:
+On the **first** invocation of this skill in a project (detect by: `outputs/paper-notes/litreader.config.json` does **not** exist, or `load_config()["initialized"]` is false), ask the user five setup questions **before** doing any work, then persist the answers with:
 
 ```
-python3 manage_reading_list.py init \
+python3 <paper-notes-skill-dir>/scripts/manage_reading_list.py init \
   --language zh|en \
   --accent rose|green|blue \
-  --connect-zotero yes|no
+  --connect-zotero yes|no \
+  --output html|obsidian|both \
+  --research-context yes|no
 ```
 
-The three questions, and what each controls:
+The five questions, and what each controls:
 
 1. **Preferred language** (`--language`) — the language the summary + UI copy should default to. zh = Chinese (default), en = English. The LLM summary procedure then defaults to that language instead of always Chinese.
 2. **Default page color / accent** (`--accent`) — rose / green / blue. Stored as `default_accent` and injected into **every** generated page's `<body data-accent>` + the topbar switcher's initial selection, so newly built pages show the chosen color on first open (before any per-page localStorage override).
 3. **Connect to Zotero?** (`--connect-zotero`) — the most consequential switch:
-   - **yes** (default): normal flow — fetch metadata/annotations via the `zotero.py` CLI, derive the reading calendar, extract figures from the cloud/local PDF, and render the Zotero-only modules (paper page: "Zotero 高亮" + "Zotero 笔记"; dashboard: the reading-heatmap + "最近阅读" timeline).
+   - **yes** (default): normal flow — fetch metadata/annotations via the `zotero.py` CLI, derive the reading calendar, extract figures from the cloud/local PDF, and render the Zotero-only modules. The Obsidian dashboard shows only the aggregate SVG heatmap, never a recent-reading or per-day paper list.
    - **no**: the skill runs **Zotero-free**. The dashboard's heatmap/timeline are hidden (`body[data-zotero="off"]`), the paper page hides the two Zotero-only submodules, and papers are added by **manual upload** instead of Zotero fetch:
      ```
-     python3 manage_reading_list.py add --manual \
+     python3 <paper-notes-skill-dir>/scripts/manage_reading_list.py add --manual \
        --pdf /path/to/paper.pdf --title "..." --authors "..." \
        --year 2024 --venue "..." --doi 10.x/y --abstract "..."
      ```
      This reads the local PDF, extracts figures locally (PyMuPDF, venv python), writes an empty summary template, and renders the page. The key is synthetic (`local-<hash>`). The user later asks the LLM to fill the summary.
+4. **Output format** (`--output`) — `html` writes editable web pages, `obsidian` writes a self-contained Markdown vault, and `both` maintains both. Existing configs without this key migrate to `html`.
+5. **Use research context?** (`--research-context`) — `yes` makes every future paper add pause before mutation and requires the user to choose one active/paused research project or explicitly choose `none`; `no` skips this question during paper adds and generates general research significance. This preference can later be changed with `manage_reading_list.py settings --research-context yes|no`.
 
-`build_paper_html.py` and `build_dashboard.py` both call `_common.load_config()` and inject `__DEFAULT_ACCENT__` + `__ZOTERO_MODE__` into the templates — so the answers take effect on the **next** build with no further action. On subsequent calls the config file exists, so skip the questions.
+All builders call `_common.load_config()`. HTML builders inject accent/Zotero settings; the output mode selects HTML, Obsidian, or both. On subsequent calls the config exists, so skip the questions.
 
-**Enforced in code:** `manage_reading_list.py add` refuses to run until init has completed — if the config is missing or `initialized` is false it prints `{"ok":false,"error":"not_initialized","next_step":"run_init"}` and exits with code 3 without adding anything. So if you ever see that response, stop and ask the three questions, run `init`, then retry the add. (`list` / other read commands are not gated.)
+**Enforced in code:** `manage_reading_list.py add` refuses to run until init has completed — if the config is missing or `initialized` is false it prints `{"ok":false,"error":"not_initialized","next_step":"run_init"}` and exits with code 3 without adding anything. Ask the five questions, run `init`, then retry the add. (`list` / other read commands are not gated.)
 
 ## Outputs
 
 All runtime artifacts land in the working directory under `outputs/paper-notes/`:
 
 - `reading-list.json` — the manifest (source of truth for the close-reading set).
-- `dashboard.html` — the reading dashboard.
-- `papers/<KEY>.html` — one editable page per paper.
+- `html/dashboard.html` — the reading dashboard.
+- `html/research/<project name>.html` — one read-only HTML detail page per research project; the compact dashboard table links to it.
+- `html/papers/<KEY>.html` — one editable page per paper. Its figures and fonts also live under `html/`, making the HTML tree self-contained.
 - `papers/<KEY>.summary.json` — the LLM-generated structured summary.
 - `papers/<KEY>.edits.json` — the user's exported HTML edits (persists across refresh).
 - `papers/<KEY>.annotations.json` — cached PDF annotations + notes.
 - `papers/<KEY>.section_text.json` — Python-extracted searchable text grouped by paper section; this is the only full-text input for the LLM.
+- `research-projects.json` — canonical structured research projects and per-field timestamps.
+- `collection-tree.json` — the last successfully fetched Zotero hierarchy, stored as a versioned cache envelope. A failed fetch never replaces it; Obsidian path migration stops if any selected collection ancestor cannot be resolved.
+- `obsidian/Dashboard.md`, `obsidian/Papers/<Collection hierarchy>/<paper title>.md`, `obsidian/Attachments/<Collection hierarchy>/<paper title>/`, `obsidian/Research/<ID>.md` — the self-contained vault when enabled. Paper attachments mirror the paper-note collection/title path; only dashboard-wide assets stay directly under `Attachments/`.
 
 The skill package itself holds no runtime state — everything is reproducible from the manifest + Zotero.
 
-## The `zotero.py` CLI & annotation fetching
+## The bundled `zotero.py` CLI & annotation fetching
 
-The `zotero.py` CLI (at `.codex/skills/zotero/scripts/zotero.py`) exposes search / get / collections / children; this skill shell-calls it for item **search** and **get**. `scripts/fetch_annotations.py` fills a gap: `zotero.py` does NOT parse the Zotero 6+ `annotation` itemType (PDF highlights). Annotations live two levels below the paper — paper → PDF attachment → annotations — so `fetch_annotations.py` walks that hierarchy. See `references/annotation_fields.md` for the field mapping and color strategy.
+This skill's own `scripts/zotero.py` exposes only read-only **search** and **get** commands. It deliberately omits add, update, delete, upload, and other Zotero write operations. `scripts/fetch_annotations.py` separately reads the Zotero 6+ `annotation` itemType (PDF highlights). Annotations live two levels below the paper — paper → PDF attachment → annotations — so `fetch_annotations.py` walks that hierarchy. See `references/annotation_fields.md` for the field mapping and color strategy.
 
 ## Commands
 
@@ -100,18 +107,23 @@ The `zotero.py` CLI (at `.codex/skills/zotero/scripts/zotero.py`) exposes search
 | archive | `manage_reading_list.py archive --key <KEY>` (restore with `restore`) |
 | remove | `manage_reading_list.py remove --key <KEY>` (`--keep-edits` preserves user edits) |
 | list | `manage_reading_list.py list [--json]` |
+| manage research | after a conversational intake and user confirmation, `manage_reading_list.py research add|update|list|archive ...` |
+| enable/disable research context prompts | `manage_reading_list.py settings --research-context yes|no` |
+| sync editable views | `sync_edits.py [--key <KEY>]` |
+| finalize generated notes | `manage_reading_list.py finalize-summary --key <KEY>` |
 
-All scripts run with `python3` (e.g. `python3 .codex/skills/paper-notes/scripts/manage_reading_list.py add --key VNPN6FHT`). The one exception is `extract_figures.py`, which needs PyMuPDF. `manage_reading_list.py` already resolves a PyMuPDF-capable interpreter (env override `LITERATURE_READER_FIGURE_PYTHON`, else a managed venv, else the current interpreter) and invokes it automatically during `add`/`refresh`, so you usually don't call it directly.
+Resolve `<paper-notes-skill-dir>` to the directory containing this `SKILL.md`. All scripts run with `python3` (e.g. `python3 <paper-notes-skill-dir>/scripts/manage_reading_list.py add --key VNPN6FHT`). The one exception is `extract_figures.py`, which needs PyMuPDF. `manage_reading_list.py` already resolves a PyMuPDF-capable interpreter (env override `LITERATURE_READER_FIGURE_PYTHON`, else a managed venv, else the current interpreter) and invokes it automatically during `add`/`refresh`, so you usually don't call it directly.
 
 ## The "manual add" interaction flow (IMPORTANT)
 
 `add` is the primary entrypoint. The user says "把 Lutz 2008 Gender Migration Domestic Work 加入精读". Execute:
 
-1. **Search & confirm** — `zotero.py --json search "Lutz Gender Migration Domestic Work" --limit 5`. If one high-confidence match, show it and wait for yes. If multiple, list the top 5 and ask which. If none, suggest `zotero.py add-doi` first. **Never add without confirming the match.**
-2. **Add** — `manage_reading_list.py add --key <KEY>`. The script fetches metadata (via zotero.py), resolves collection names, fetches annotations + derives reading time (via fetch_annotations.py), **extracts searchable section text from the PDF** (via extract_sections.py with PyMuPDF), extracts figures for human viewing, writes an empty summary template, renders the HTML, updates the manifest, and prints `{"ok":true,"next_step":"generate_summary",...}`. If a PDF exists but text extraction fails or produces less than 200 characters, the add stops and reports the failure.
-3. **Generate the summary** (when `next_step == "generate_summary"`) — first build a coherent article guide, then follow the evidence-aware schema procedure below.
-4. **Rebuild dashboard** — `build_dashboard.py`.
-5. **Report** — after **every** HTML generation or regeneration, explicitly remind the user to open the paper page and click **"Sync Folder"**, then choose `outputs/paper-notes/`. This persists browser edits and status to `papers/<KEY>.edits.json`; it must be done even when the page is only regenerated. Also provide the HTML path and note that edits otherwise remain only in localStorage; Export/Import JSON is the fallback in non-Chromium browsers.
+1. **Search & confirm** — `python3 <paper-notes-skill-dir>/scripts/zotero.py --json search "Lutz Gender Migration Domestic Work" --limit 5`. If one high-confidence match, show it and wait for yes. If multiple, list the top 5 and ask which. If none, ask the user to add the item in Zotero first. **Never add without confirming the match.**
+2. **Resolve research context when enabled** — read `load_config()["use_research_context"]`. When true, list active/paused projects and ask the user to choose one or explicitly choose no project. Then call add with `--research <ID>|none`. Never infer a project from topic similarity. When false, do not ask and omit `--research`. The CLI enforces this before writing any paper files and returns `next_step: repeat_add_with_research` if the choice is missing.
+3. **Add** — `manage_reading_list.py add --key <KEY> [--research <ID>|none]`. When Zotero assigns several collections, ask the user which one to use and repeat with `--collection <KEY>`; one collection is automatic and none maps to `Unfiled`. The script fetches source data, writes an empty summary template in `template` state, updates the manifest and dashboard, but deliberately does not create a formal paper page. If PDF text extraction fails, the add stops.
+4. **Generate the summary** (when `next_step == "generate_summary"`) — first build a coherent article guide, then follow the evidence-aware schema procedure below.
+5. **Finalize** — after both summary and sections JSON are complete, run `manage_reading_list.py finalize-summary --key <KEY>`. This validates them, records canonical field baselines, and first-renders only the enabled outputs.
+6. **Report** — after **every** HTML generation or regeneration, explicitly remind the user to open `outputs/paper-notes/html/papers/<KEY>.html` and click **"Sync Folder"**, then choose `outputs/paper-notes/`. This persists browser edits and status to `papers/<KEY>.edits.json`; it must be done even when the page is only regenerated. Also provide the HTML path and note that edits otherwise remain only in localStorage; Export/Import JSON is the fallback in non-Chromium browsers.
 
 ## LLM summary generation procedure (evidence-aware schema v4)
 
@@ -130,22 +142,31 @@ When `add` (or `refresh --regenerate-summary`) signals summary generation is nee
 4. Adapt the guide to the paper profile instead of forcing every paper into one template. For method/system papers, foreground the technical bottleneck, core mechanism, validation, and operating conditions. For empirical/replication papers, foreground the question, design, findings, and competing explanations. For benchmark/dataset papers, foreground the measurement gap, construction choices, evaluation protocol, and capability or coverage insight. For theory papers, foreground the assumptions, propositions, derivation, and scope. For survey papers, foreground the review question, coverage, organizing framework, and synthesis.
 5. Generate the detailed fields using the guide as the controlling narrative. Do not treat `research_question`, `contribution`, `method_or_design`, `results_or_claims`, and `interpretation` as independent summaries. They must agree with the guide and add detail rather than restating it. Fields that do not apply should be empty or `不适用`; do not invent generic content just to fill the schema.
 6. Distinguish three layers whenever interpreting a result: (a) what the paper directly reports, (b) what the evidence supports, and (c) what remains a hypothesis, limitation, or alternative explanation. Never turn an author interpretation into a demonstrated mechanism without evidence.
-7. Apply the remaining hard rules:
+7. Resolve research context according to configuration before generating `relevance_to_my_work`. If `use_research_context` is true, the add flow must already have saved an explicit project/none choice; use it and never silently choose a project. If false, do not ask and write only general research significance. Reuse an existing paper's saved choice on refresh unless explicitly changed. Completed projects remain historical context but cannot be selected for a new analysis.
+8. Apply the remaining hard rules:
    - `key_quotes.text` MUST be copied **verbatim** from a real Zotero highlight — never paraphrase or invent. If no annotations, `key_quotes: []`.
-   - `relevance_to_my_work` must use the project's current memory and name a specific research question, design choice, dataset decision, or measurement problem. Do not invent a connection when one is weak.
+   - With a selected project, `relevance_to_my_work` must use its structured fields and name a specific research question, design choice, dataset decision, or measurement problem. With no project, write general research significance without implying knowledge of the user's work. Do not invent a connection when one is weak.
    - Default language: Chinese. Quote text stays in the original language.
    - Do not use first-person stance labels or “不是……而是……” / “not X but Y” constructions.
    - Use `evidence_map` and `uncertainties` to separate reported facts, supported inferences, speculation, and missing information.
    - Keep prose concise and evidence-dense; use paragraphs only where the content has genuinely distinct parts. `build_paper_html.py`'s `render_prose()` + the template's `writeProse`/`readProse` JS preserve paragraph breaks.
    - Write prose as standard Markdown source, never HTML. The renderer supports `**bold**`, `*italic*`, inline code, links, and simple ordered/unordered lists while preserving the original Markdown for future `.md` or other output formats. Use selective `**bold**` spans for important terms, metrics, mechanisms, or caveats; do not bold entire sentences or paragraphs.
-8. Write the JSON to `papers/<KEY>.summary.json`.
+9. Record `research_context` (`id`, `name`, `research_question`, `project_updated_at`) and `relevance_generated_at`, then write the JSON to `papers/<KEY>.summary.json`.
 9. Read every section in `papers/<KEY>.section_text.json` and write `papers/<KEY>.sections.json`. Each section object must contain `heading`, `page`, `level`, `summary`, and `analysis`; `summary` states what the section says, while `analysis` evaluates evidence, assumptions, limitations, or relevance. Do not skip this step because the summary JSON was successfully written. **Hierarchy is mandatory:** derive `level` from the source number — `4` is level 2, `4.1` is level 3, `4.1.1` is level 4, and so on. A numbered child must never have the same level as its parent.
 10. Validate that `sections.json` exists, contains at least one section with non-empty `summary` and `analysis`, preserves source order, has no duplicate section numbers, and places every parent before its subsections. Explicitly verify that every dotted number has a deeper `level` than its parent (for example, `4.1` > `4`); the renderer infers hierarchy from numbering as a safety net, but an incorrect `level` in the generated JSON remains a generation error and must be reported. If validation fails, report the exact artifact or numbering error and do not claim the paper is fully generated.
 11. Before rendering, perform a narrative consistency check: the guide's question, approach, findings, and insight must be traceable to the detailed fields and section analysis; remove duplicated or contradictory claims; mark unsupported explanations in `uncertainties`.
-12. **Merge browser-synced edits before every HTML build** — check for `papers/<KEY>.edits.json` before writing a new summary or running `build_paper_html.py`. If it exists, read it and write its user-authored values back into the canonical JSON artifacts before rendering: merge overview/detail fields into `papers/<KEY>.summary.json` (map `guide_background`, `guide_question`, `guide_approach`, `guide_findings`, `guide_insight`, and `guide_limitations` to the corresponding `reading_guide` fields); merge its `sections` array into `papers/<KEY>.sections.json`; retain the manifest's status flow separately. Browser values win for every field they contain. Do not overwrite, discard, or merely render around those edits. Validate both updated JSON files after merging.
-13. Re-run `build_paper_html.py --key <KEY>` then `build_dashboard.py`.
+13. Run `sync_edits.py` at workflow boundaries before refresh/rebuild. HTML edits continue to merge from `edits.json`. Obsidian Markdown is authoritative for user-maintained note fields: visible headings identify fields, missing unambiguous headings clear only their corresponding JSON values, and duplicate/ambiguous headings are reported without changing canonical JSON. Obsidian pages contain no hidden field markers or baseline hashes.
+14. For a new or regenerated summary, use `finalize-summary`; do not call a builder directly while the paper is in `template` state.
 
-If `papers/<KEY>.edits.json` exists (browser-synced edits), **read and merge it into the canonical summary/sections JSON before every HTML generation or regeneration**, then render from the merged artifacts; its `status` field also flows into the dashboard. User edits always win. Do not delete edits unless the user asks to discard them.
+## Research projects and editable-view sync
+
+Store projects in `research-projects.json` with stable ID, name, status, research question, background, method/design, data/materials, current challenges, keywords, and per-field timestamps. For Obsidian output, `Research/*.md` is authoritative for these editable fields and synchronizes back to JSON; the Dashboard remains derived and read-only.
+
+HTML research pages and both dashboards are read-only. A project may be created conversationally through the research CLI; afterward the user may edit its Obsidian Research page directly. Synchronizing that page updates `research-projects.json` and the Dashboard's core-question/status/keyword columns.
+
+Obsidian is content- and edit-equivalent, not browser-interaction-equivalent. Its ordinary Markdown files are the editing surface and source of truth for structured note content; do not add `%% paper-notes:field... %%` comments. Preserve user-added headings and paragraphs during rebuilds. Zotero metadata, highlights, figures, attachments, and reading statistics remain generated from their original sources. No Dataview or community plugin is required.
+
+Never delete HTML or Obsidian paper edits unless the user asks to discard them. Research context is selected in conversation for summary generation and displayed read-only on pages.
 
 The generated paper page is organized into three reader-facing blocks: `论文速览` (background, question, approach, findings, insight), `原文精读` (section summaries/analyses, quotes, figures, and source material), and `参考意义` (risks, costs, relevance, limitations, and open questions). Keep the content assignment aligned with this structure; do not put open questions inside the close-reading block.
 
@@ -168,7 +189,8 @@ Both templates (`assets/paper_template.html`, `assets/dashboard_template.html`) 
 ## Dashboard: collections & views
 
 The "By Collection" module renders Zotero's **nested** collection hierarchy (parent→child), not a flat name list. Mechanics:
-- `_common.fetch_collection_tree()` pulls the full tree (`key` / `name` / `parentCollection`) straight from the Zotero Web API — `zotero.py collections` only prints human-readable text and ignores `--json`, so do NOT use it for data.
+- `_common.fetch_collection_tree()` pulls the full tree (`key` / `name` / `parentCollection`) straight from the Zotero Web API; the bundled `zotero.py` intentionally has no collections command.
+- Treat collection fetch failure as unavailable, never as an empty tree. Only an explicit `build_markdown.py --prepare-paths` may move notes; it must validate every ancestor before moving anything and use the last complete cache when offline.
 - `manage_reading_list.py` stores each paper's collections as `[{key, name, parent}]`. **Note:** `zotero.py get --json` prints `item["data"]` directly, so `collections` is a top-level list of **key strings** — read `item.get("collections")`, never `item.get("data", {}).get("collections")`.
 - `build_dashboard.py` → `_build_collection_hierarchy()` builds a nested tree, propagates subtree counts, prunes branches with 0 papers (ancestors stay visible), and emits breadcrumb paths used by the table view's Collection column.
 - A **卡片视图 / 表格视图** toggle switches paper rendering between cards (inside each collection) and a table. Both views show **read-only tags** (from Zotero) as non-editable chips.

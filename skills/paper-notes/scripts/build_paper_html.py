@@ -43,6 +43,7 @@ PAPER_PLACEHOLDER_REGISTRY = [
     "__HIGHLIGHTS_HTML__", "__NOTES_HTML__",
     "__ANNOTATION_COUNT__", "__READING_TIME__",
     "__INITIAL_EDITS_JSON__", "__GENERATED_AT__",
+    "__RESEARCH_CONTEXT_LABEL__",
     # First-call config (injected from litreader.config.json)
     "__DEFAULT_ACCENT__", "__ZOTERO_MODE__",
 ]
@@ -500,14 +501,8 @@ def build(key, summary_file=None):
             except (json.JSONDecodeError, OSError):
                 summary = {}
 
-    # Edits override summary if present.
+    # Pure rendering: explicit sync_edits.py has already merged user edits.
     edits = {}
-    ep = _common.PAPERS_DIR / (key + ".edits.json")
-    if ep.exists():
-        try:
-            edits = json.loads(ep.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            edits = {}
 
     # Per-section summary + analysis (LLM-generated).
     sections_data = {"sections": []}
@@ -569,6 +564,8 @@ def build(key, summary_file=None):
     initial["zotero_key"] = key
     initial["sections"] = sections_data.get("sections", [])
     initial["generated_at"] = summary.get("generated_at", _common.now_iso())
+    initial["research_context_id"] = paper.get("research_context_id")
+    initial["_field_updated_at"] = edits.get("_field_updated_at", {})
     # Bump on every build. The page's load logic compares this against the
     # localStorage snapshot; a mismatch (stale/older sync) discards the
     # stale copy in favour of the freshly-built embedded data, so fixes always
@@ -595,6 +592,12 @@ def build(key, summary_file=None):
     cfg = _common.load_config()
     default_accent = cfg["default_accent"]
     zotero_mode = "on" if cfg["connect_zotero"] else "off"
+    selected_project = paper.get("research_context_id")
+    project_label = "不基于任何研究项目"
+    if selected_project:
+        project = next((p for p in _common.load_research_projects().get("projects", [])
+                        if p.get("id") == selected_project), None)
+        project_label = project.get("name", selected_project) if project else selected_project
 
     replacements = {
         "__DEFAULT_ACCENT__": default_accent,
@@ -625,6 +628,7 @@ def build(key, summary_file=None):
         "__COST__": render_prose(initial["cost"]),
         "__EXPERIMENTS_RESULTS__": render_prose(initial["experiments_results"]),
         "__RELEVANCE__": render_prose(initial["relevance_to_my_work"]),
+        "__RESEARCH_CONTEXT_LABEL__": _common.html_escape(project_label),
         "__KEY_QUOTES_HTML__": render_quotes(initial["key_quotes"]),
         "__FIGURES_HTML__": render_figures(key),
         "__SECTIONS_HTML__": render_sections(initial["sections"], key),
@@ -661,7 +665,8 @@ def main():
     else:
         _common.ensure_output_dirs()
         _common.copy_fonts()
-        out = _common.PAPERS_DIR / (args.key + ".html")
+        _common.copy_html_figures(args.key)
+        out = _common.HTML_PAPERS_DIR / (args.key + ".html")
         out.write_text(html, encoding="utf-8")
         sys.stderr.write("Wrote %s\n" % out)
 

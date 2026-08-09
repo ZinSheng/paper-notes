@@ -15,6 +15,7 @@ Zero dependencies — stdlib only.
 
 import argparse
 import json
+import re
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -23,11 +24,13 @@ import _common
 
 HERE = Path(__file__).resolve().parent
 TEMPLATE_PATH = HERE.parent / "assets" / "dashboard_template.html"
+RESEARCH_TEMPLATE_PATH = HERE.parent / "assets" / "research_template.html"
 
 DASHBOARD_PLACEHOLDER_REGISTRY = [
     "__PAPERS_JSON__", "__GROUPS_JSON__",
+    "__RESEARCH_JSON__",
     "__CALENDAR_JSON__", "__STATS_JSON__", "__TOTAL_PAPERS__",
-    "__FIRST_KEY__", "__GENERATED_AT__",
+    "__FIRST_PAPER_PATH__", "__GENERATED_AT__",
     # First-call config (injected from litreader.config.json)
     "__DEFAULT_ACCENT__", "__ZOTERO_MODE__",
 ]
@@ -59,6 +62,67 @@ def _format_authors_short(creators):
     if len(names) == 1:
         return names[0]
     return names[0] if len(names) == 1 else names[0] + " et al."
+
+
+def _safe_filename(value, fallback):
+    name = re.sub(r'[\\/:*?"<>|\x00-\x1f]', "－", str(value or "")).strip().rstrip(". ")
+    return name or fallback
+
+
+def _research_html_paths(projects):
+    used, result = set(), {}
+    for project in projects:
+        stem = _safe_filename(project.get("name"), project.get("id", "research"))
+        filename = stem + ".html"
+        if filename.casefold() in used:
+            filename = stem + " — " + project["id"] + ".html"
+        used.add(filename.casefold())
+        result[project["id"]] = "research/" + filename
+    return result
+
+
+def _render_research_page(project, cfg):
+    template = RESEARCH_TEMPLATE_PATH.read_text(encoding="utf-8")
+    def text(value):
+        escaped = _common.html_escape(str(value or ""))
+        return escaped.replace("\n", "<br>") if escaped else '<span class="empty">—</span>'
+    keywords = "".join('<span class="keyword">%s</span>' % _common.html_escape(str(x))
+                       for x in (project.get("keywords") or []))
+    replacements = {
+        "__TITLE__": _common.html_escape(project.get("name", project.get("id", "Research"))),
+        "__STATUS__": _common.html_escape(project.get("status", "active")),
+        "__RESEARCH_QUESTION__": text(project.get("research_question")),
+        "__BACKGROUND__": text(project.get("background")),
+        "__METHOD__": text(project.get("method_or_design")),
+        "__DATA__": text(project.get("data_or_materials")),
+        "__CHALLENGES__": text(project.get("current_challenges")),
+        "__KEYWORDS__": keywords or '<span class="empty">—</span>',
+        "__DEFAULT_ACCENT__": cfg.get("default_accent", "blue"),
+    }
+    return _common.apply_placeholders(template, replacements, list(replacements))
+
+
+def _write_research_pages(projects, cfg):
+    paths = _research_html_paths(projects)
+    out_dir = _common.HTML_RESEARCH_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+    desired = set()
+    for project in projects:
+        target = _common.HTML_DIR / paths[project["id"]]
+        # Case-insensitive filesystems keep the old spelling when only the
+        # filename's case changes, which can leave dashboard links broken when
+        # the output is later served from a case-sensitive filesystem.
+        for existing in out_dir.glob("*.html"):
+            if existing.name.casefold() == target.name.casefold() and existing.name != target.name:
+                temporary = out_dir / (project["id"] + ".rename-tmp")
+                existing.replace(temporary)
+                temporary.replace(target)
+                break
+        target.write_text(_render_research_page(project, cfg), encoding="utf-8")
+        desired.add(target.resolve())
+    for stale in out_dir.glob("*.html"):
+        if stale.resolve() not in desired:
+            stale.unlink()
 
 
 def _week_monday(date_str):
@@ -112,9 +176,14 @@ def _build_collection_hierarchy(papers_flat):
     stored {key,name,parent} as an offline fallback.
     """
     # 1. Live tree (correct names + parents); fall back to empty on failure.
-    try:
-        tree = _common.fetch_collection_tree()
-    except Exception:
+    if _common.load_config().get("connect_zotero"):
+        try:
+            tree = _common.fetch_collection_tree()
+            if tree is None:
+                tree = _common.load_collection_tree_cache() or []
+        except Exception:
+            tree = []
+    else:
         tree = []
     node_map = {c["key"]: {"name": c["name"], "parent": c.get("parent")}
                 for c in tree if c.get("key")}
@@ -211,8 +280,6 @@ def _build_collection_hierarchy(papers_flat):
 def build(include_archived=False):
     manifest = _common.load_manifest()
     papers_all = manifest.get("papers", [])
-    # Fold browser-synced status from *.edits.json into the manifest snapshot.
-    _merge_edits_status(papers_all)
     papers = [p for p in papers_all
               if include_archived or p.get("status") != "archived"]
 
@@ -291,7 +358,7 @@ def build(include_archived=False):
         "total_reading_minutes": total_reading_minutes,
     }
 
-    first_key = papers_flat[0]["key"] if papers_flat else ""
+    first_paper_path = papers_flat[0]["html_path"] if papers_flat else "#"
 
     def _json(obj):
         return json.dumps(obj, ensure_ascii=False).replace("<", "\\u003c")
@@ -299,14 +366,24 @@ def build(include_archived=False):
     # First-call config (language / default accent / Zotero connection).
     cfg = _common.load_config()
     zotero_mode = "on" if cfg["connect_zotero"] else "off"
+    projects = _common.load_research_projects().get("projects", [])
+    research_paths = _research_html_paths(projects)
+    research_compact = [{
+        "id": p.get("id"), "name": p.get("name"),
+        "status": p.get("status", "active"),
+        "research_question": p.get("research_question", ""),
+        "keywords": p.get("keywords", []),
+        "html_path": research_paths[p["id"]],
+    } for p in projects]
 
     replacements = {
         "__PAPERS_JSON__": _json(papers_flat),
+        "__RESEARCH_JSON__": _json(research_compact),
         "__GROUPS_JSON__": _json(groups),
         "__CALENDAR_JSON__": _json(calendar),
         "__STATS_JSON__": _json(stats),
         "__TOTAL_PAPERS__": str(total),
-        "__FIRST_KEY__": _common.html_escape(first_key),
+        "__FIRST_PAPER_PATH__": _common.html_escape(first_paper_path),
         "__GENERATED_AT__": _common.now_iso(),
         "__DEFAULT_ACCENT__": cfg["default_accent"],
         "__ZOTERO_MODE__": zotero_mode,
@@ -329,6 +406,8 @@ def main():
     else:
         _common.ensure_output_dirs()
         _common.copy_fonts()
+        projects = _common.load_research_projects().get("projects", [])
+        _write_research_pages(projects, _common.load_config())
         out = _common.DASHBOARD_PATH
         out.write_text(html, encoding="utf-8")
         sys.stderr.write("Wrote %s\n" % out)

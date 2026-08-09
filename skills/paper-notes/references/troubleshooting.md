@@ -33,8 +33,9 @@ returns `has_pdf: false` with empty annotations.
 highlights panel ("未检测到 PDF 高亮"). The LLM summary is generated from the
 `abstractNote` only, with `key_quotes: []`. No error.
 
-To add a PDF: use the zotero skill's `fetch-pdfs` command, or attach one in the
-Zotero desktop client, then `refresh --key <KEY>`.
+To add a PDF, attach one in the Zotero desktop client, then run
+`refresh --key <KEY>`. An independently installed full Zotero-management skill
+may also be used, but it is optional and is not a dependency of paper-notes.
 
 ## Paper has PDF but no annotations (`has_annotations: false`)
 
@@ -169,3 +170,22 @@ python3 scripts/extract_figures.py <KEY>
 
 A PDF may have no extractable embedded images (some journals render figures as
 vector graphics, not raster XObjects). In that case the count is 0 — not a bug.
+# HTML / Obsidian edit conflicts
+
+Run `python3 scripts/sync_edits.py` only at an explicit workflow boundary before rebuilding. Different fields merge independently. Equal or incomparable-timestamp conflicts are preserved under `outputs/paper-notes/conflicts/`; canonical content remains active until the user chooses a version. Builders never sync implicitly.
+
+If an old generated Markdown page contains empty field markers, its baseline hash identifies it as an unchanged generated view, so it cannot clear a newly generated non-empty summary. `refresh --regenerate-summary` enters template state and does not rebuild a paper page; after writing the new summary and sections, always use `finalize-summary --key <KEY>`.
+
+# Missing Obsidian output after upgrade
+
+Older configs intentionally default to `output_mode: html`. Re-run `manage_reading_list.py init` with the existing answers plus `--output obsidian|both`.
+
+# Obsidian collection directories show Zotero keys
+
+Directories such as `6WIBXA55` indicate an incomplete collection hierarchy. Do not rebuild or move notes using those fallback names. `build_markdown.py --prepare-paths` now uses only a successfully fetched tree or the last versioned complete cache, validates every selected collection ancestor, and stops without modifying files when the hierarchy is incomplete.
+
+# Research project unavailable for new analysis
+
+Completed projects remain available for historical paper bindings but cannot be selected for new analysis. Choose an active/paused project or `none`, then regenerate the relevance analysis.
+
+Research directions are managed only through AI conversation followed by `research add|update|archive`. Dashboard and research pages are read-only and intentionally provide no sync, add, edit, or selection controls.

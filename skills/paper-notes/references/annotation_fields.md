@@ -5,9 +5,9 @@ parses, and the color-category display strategy.
 
 ## Why a separate fetcher?
 
-The companion `zotero` skill's `children`/`get` commands recognize only
-`attachment` and `note` itemTypes. PDF highlights are stored as `annotation`
-items two levels below the paper:
+The bundled read-only `zotero.py` handles paper search and metadata lookup.
+PDF highlights are stored as `annotation` items two levels below the paper and
+are therefore handled by the dedicated `fetch_annotations.py` pipeline:
 
 ```
 paper (itemType: journalArticle / bookSection / ...)

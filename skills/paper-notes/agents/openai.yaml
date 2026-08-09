@@ -1,0 +1,4 @@
+interface:
+  display_name: "Paper Notes"
+  short_description: "Build editable HTML and Obsidian close-reading notes"
+  default_prompt: "Use $paper-notes to maintain my reading list and generate research-aware close-reading notes."

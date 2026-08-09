@@ -9,7 +9,7 @@
 
 **A paper close-reading skill that turns every paper into research sense.**
 
-*Zotero sync · Paper overview · Deep reading · Editable notes · Reading dashboard*
+*Zotero sync · Paper overview · Deep reading · HTML & Obsidian notes · Research dashboard*
 
 [English](README.md) · [中文](README_ZH.md)
 
@@ -19,21 +19,22 @@
 
 > **We Build Your Research Sense** — turn every paper into intuition you can use in your own research.
 
-`paper-notes` is an AI-agent skill for close-reading research papers. It syncs collections, paper metadata, PDF highlights, and notes from Zotero; distils each paper's structure and key findings from its text; then turns section-by-section reading notes, relevance to your work, and reading history into editable local knowledge assets.
+`paper-notes` is an AI-agent skill for close-reading research papers. It syncs collections, paper metadata, PDF highlights, and notes from Zotero; distils each paper's structure and key findings from its text; then turns section-by-section reading notes, research directions, and reading history into editable HTML and Obsidian knowledge assets.
 
 ## What you get
 
 - **One-click Zotero sync**: bring collections, paper metadata, PDF highlights, and notes from your existing library straight into the workflow.
 - **A paper at a glance**: surface the key points, argument structure, and core conclusions before you decide where to go deep.
 - **Section-by-section deep reading**: generate reading notes alongside the source text, giving long papers a clear path through close reading.
-- **Relevance to your research**: relate a paper to your questions, methods, and direction, so reading compounds into research sense.
+- **Your research directions**: manage structured research projects and relate each paper to your questions, methods, data, and current challenges.
 - **A complete reading view**: the dashboard groups papers by Zotero collection and brings together lists, tag filters, reading records, and a historical heatmap.
-- **Notes that stay yours**: edit every reading page directly in the browser, save automatically, and sync `.edits.json` back to a local folder.
+- **Notes that stay yours**: use editable browser pages, a self-contained Obsidian vault, or both, with changes synchronized back to local structured data.
 
 ## Features
 
 - **Evidence-first text pipeline**: extracts PDF body text to `section_text.json`; failed extraction prevents full-note generation. The model reads extracted text, never PDF images.
 - **Structured close-reading outputs**: creates paper overviews, section analyses, and deep-reading notes. `sections.json` preserves source numbering and validates parent/child order.
+- **HTML + Obsidian outputs**: keeps web pages and a self-contained Markdown vault in separate `html/` and `obsidian/` directories.
 - **Markdown + LaTeX**: every note field supports rich text and live MathJax formula rendering.
 - **Figure extraction + Lightbox**: uses PyMuPDF to extract embedded PDF figures, filter tiny or low-resolution images, and inspect them at native resolution.
 - **Editable, exportable, reproducible**: browser editing, localStorage autosave, JSON import/export, and folder sync; manifests, summaries, sections, annotations, and edits are stored separately.
@@ -59,14 +60,14 @@ When using Zotero, set `ZOTERO_API_KEY` and `ZOTERO_USER_ID`; figure extraction 
 
 ```bash
 cd <your project directory>
-python3 .codex/skills/paper-notes/scripts/manage_reading_list.py init \
-  --language en --accent blue --connect-zotero yes
-python3 .codex/skills/paper-notes/scripts/manage_reading_list.py add --key <ZOTERO_KEY>
-python3 .codex/skills/paper-notes/scripts/build_dashboard.py
+python3 <paper-notes-skill-dir>/scripts/manage_reading_list.py init \
+  --language en --accent blue --connect-zotero yes --output both --research-context yes
+python3 <paper-notes-skill-dir>/scripts/manage_reading_list.py add --key <ZOTERO_KEY>
+python3 <paper-notes-skill-dir>/scripts/build_dashboard.py
 ```
 
-Outputs are written to `outputs/paper-notes/` under the current working directory.
+Outputs are written under `outputs/paper-notes/`, with HTML and Obsidian artifacts in `html/` and `obsidian/` respectively.
 
 ## License
 
-Provided as-is for personal learning and use.
+This project is licensed under the [MIT License](LICENSE).
