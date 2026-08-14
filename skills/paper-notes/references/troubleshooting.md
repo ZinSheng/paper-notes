@@ -172,7 +172,7 @@ A PDF may have no extractable embedded images (some journals render figures as
 vector graphics, not raster XObjects). In that case the count is 0 — not a bug.
 # HTML / Obsidian edit conflicts
 
-Run `python3 scripts/sync_edits.py` only at an explicit workflow boundary before rebuilding. Different fields merge independently. Equal or incomparable-timestamp conflicts are preserved under `outputs/paper-notes/conflicts/`; canonical content remains active until the user chooses a version. Builders never sync implicitly.
+Use `python3 scripts/sync_edits.py` at explicit workflow boundaries such as an HTML-only refresh or rebuild. A normal `build_markdown.py` run is itself a synchronization boundary: it imports recognized Obsidian paper and research fields into canonical JSON before rebuilding the vault. Its `--stdout` and `--dashboard-only` modes do not import edits. Different fields merge independently. Equal or incomparable-timestamp conflicts are preserved under `outputs/paper-notes/conflicts/`; canonical content remains active until the user chooses a version.
 
 If an old generated Markdown page contains empty field markers, its baseline hash identifies it as an unchanged generated view, so it cannot clear a newly generated non-empty summary. `refresh --regenerate-summary` enters template state and does not rebuild a paper page; after writing the new summary and sections, always use `finalize-summary --key <KEY>`.
 

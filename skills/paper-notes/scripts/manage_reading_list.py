@@ -329,7 +329,12 @@ def _cache_annotations(key, ann_data):
 
 
 def _rebuild_outputs(key=None, sync_first=True):
-    """Explicitly sync, migrate paths, then invoke pure renderers."""
+    """Synchronize editable views, migrate paths when needed, then rebuild outputs.
+
+    The Obsidian builder also performs a defensive Obsidian-to-JSON sync when
+    invoked normally, so direct builder use preserves the vault as an editable
+    authoritative view.
+    """
     if sync_first:
         sync_args = ["--key", key] if key else []
         _run_script(SYNC_EDITS, *sync_args)
