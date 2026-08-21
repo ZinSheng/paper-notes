@@ -654,6 +654,14 @@ def main():
     ap.add_argument("--stdout", action="store_true", help="Print HTML instead of writing")
     args = ap.parse_args()
 
+    # Guard: obsidian-only mode does not maintain the HTML paper tree;
+    # add/finalize render the Obsidian vault instead. --stdout stays
+    # available for piping in any mode.
+    if not args.stdout and _common.load_config().get("output_mode", "html") == "obsidian":
+        sys.stderr.write("Skipped HTML paper page: output_mode=obsidian "
+                         "(Obsidian note is maintained by build_markdown).\n")
+        return 0
+
     try:
         html = build(args.key, args.summary_file)
     except ValueError as exc:

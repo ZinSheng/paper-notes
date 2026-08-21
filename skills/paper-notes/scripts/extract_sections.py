@@ -28,6 +28,7 @@ Requires PyMuPDF (fitz). The local PDF is found via ZOTERO_DATA_DIR (default ~/Z
 
 import argparse
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -325,7 +326,9 @@ def extract(key, attachment_key=None, pdf_path=None):
                 "page": gap_start, "synthetic": True})
 
     # 7) extract text per section (page range = this.page .. next.page-1)
-    MAX_CHARS = 8000
+    # Section text cap, overridable via env for full-text extraction
+    # (default 8000 chars keeps the LLM input within a token budget).
+    MAX_CHARS = int(os.environ.get("LITERATURE_READER_SECTION_MAX_CHARS", "8000"))
     for i, s in enumerate(sections):
         end_p = sections[i + 1]["page"] if i + 1 < len(sections) else doc.page_count
         text = _extract_section_text(doc, s["page"], end_p)

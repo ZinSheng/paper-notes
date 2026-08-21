@@ -399,18 +399,28 @@ def main():
     ap.add_argument("--stdout", action="store_true")
     args = ap.parse_args()
 
+    # Guard: in obsidian-only mode the HTML dashboard is not maintained.
+    # add/finalize render the Obsidian dashboard via build_markdown, so this
+    # script must not (re)write html/dashboard.html or html/research/ here.
+    # --stdout stays available for piping in any mode.
+    if not args.stdout and _common.load_config().get("output_mode", "html") == "obsidian":
+        sys.stderr.write("Skipped HTML dashboard: output_mode=obsidian "
+                         "(Obsidian dashboard is maintained by build_markdown).\n")
+        return
+
     html = build(args.include_archived)
 
     if args.stdout:
         sys.stdout.write(html)
-    else:
-        _common.ensure_output_dirs()
-        _common.copy_fonts()
-        projects = _common.load_research_projects().get("projects", [])
-        _write_research_pages(projects, _common.load_config())
-        out = _common.DASHBOARD_PATH
-        out.write_text(html, encoding="utf-8")
-        sys.stderr.write("Wrote %s\n" % out)
+        return
+
+    _common.ensure_output_dirs()
+    _common.copy_fonts()
+    projects = _common.load_research_projects().get("projects", [])
+    _write_research_pages(projects, _common.load_config())
+    out = _common.DASHBOARD_PATH
+    out.write_text(html, encoding="utf-8")
+    sys.stderr.write("Wrote %s\n" % out)
 
 
 if __name__ == "__main__":

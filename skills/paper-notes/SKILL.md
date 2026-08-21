@@ -77,9 +77,9 @@ All builders call `_common.load_config()`. HTML builders inject accent/Zotero se
 All runtime artifacts land in the working directory under `outputs/paper-notes/`:
 
 - `reading-list.json` — the manifest (source of truth for the close-reading set).
-- `html/dashboard.html` — the reading dashboard.
+- `html/dashboard.html` — the reading dashboard. **Mode-dependent**: only maintained when `output_mode` is `html` or `both`. In `obsidian`-only mode the dashboard lives at `obsidian/Dashboard.md` and this HTML file is historical; do not rebuild it.
 - `html/research/<project name>.html` — one read-only HTML detail page per research project; the compact dashboard table links to it.
-- `html/papers/<KEY>.html` — one editable page per paper. Its figures and fonts also live under `html/`, making the HTML tree self-contained.
+- `html/papers/<KEY>.html` — one editable page per paper. Its figures and fonts also live under `html/`, making the HTML tree self-contained. **Mode-dependent**: like `html/dashboard.html`, only maintained when `output_mode` is `html` or `both`; `build_paper_html.py` and `build_dashboard.py` skip HTML writes with a notice when `output_mode=obsidian`.
 - `papers/<KEY>.summary.json` — the LLM-generated structured summary.
 - `papers/<KEY>.edits.json` — the user's exported HTML edits (persists across refresh).
 - `papers/<KEY>.annotations.json` — cached PDF annotations + notes.
@@ -100,7 +100,7 @@ This skill's own `scripts/zotero.py` exposes only read-only **search** and **get
 |---|---|
 | add paper by title/DOI | `manage_reading_list.py add --search "..."` or `add --doi 10.x/y` → confirm with user → `add --key <KEY>` |
 | add by known key | `manage_reading_list.py add --key <KEY>` |
-| show dashboard | `build_dashboard.py` |
+| show dashboard | `build_dashboard.py` — **warning**: only in `html`/`both` mode. In `obsidian`-only mode the dashboard is already maintained by `add`/`finalize-summary` (via `build_markdown --dashboard-only`); running `build_dashboard.py` writes only the HTML side and is skipped with a notice when `output_mode=obsidian` (guard since 2026-08-21). |
 | refresh annotations | `manage_reading_list.py refresh --key <KEY>` |
 | regenerate summary | `manage_reading_list.py refresh --key <KEY> --regenerate-summary` (then run the summary procedure below) |
 | change status | `manage_reading_list.py mark --key <KEY> --status reading\|done\|archived` |
